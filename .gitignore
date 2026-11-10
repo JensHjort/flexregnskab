@@ -1,0 +1,11 @@
+# Personlige data: må aldrig i versionsstyring
+*.csv
+*.xlsx
+*.xls
+Flexregnskab backup*.json
+
+# Diverse
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*

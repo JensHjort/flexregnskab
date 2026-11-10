@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flexregnskab</title>
+<meta name="description" content="Registrér din arbejdstid og følg din flexsaldo, ferie og sygdom.">
+<meta name="theme-color" content="#f7f8fa">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flex">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<script src="config.js"></script>
+<style>
+/* Quiet white sheet; one view at a time (Uge / Overblik / Indstillinger). Light-only by choice. */
+:root{
+  --bg:#f7f8fa; --surface:#ffffff; --ink:#151a21; --muted:#6c7581; --faint:#a3abb5; --line:#eaedf1; --line-2:#dde1e7;
+  --accent:#2f5bd3; --accent-soft:#eef2fd; --pos:#11845a; --pos-soft:#e8f6ef; --neg:#d2443b; --neg-soft:#fcecea;
+  --today:#f4f7ff;
+  --font:"Albert Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"DM Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:0;z-index:5;background:rgba(247,248,250,.92);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding-top:env(safe-area-inset-top,0px)}
+.hrow{display:flex;align-items:center;gap:12px 16px;padding-block:14px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;margin-right:auto}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--accent);display:block}
+nav{display:flex;gap:4px}
+nav a{padding:7px 14px;border-radius:99px;color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
+nav a:hover{color:var(--ink)}
+nav a[aria-current="page"]{background:var(--ink);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:10px 80px}
+section.view{display:flex;flex-direction:column;gap:20px}
+h2{font-size:15px;font-weight:600;margin:0}
+.label{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;min-width:0}
+.pad{padding:20px 22px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.spread{justify-content:space-between}
+button,.btn{font:inherit;font-size:15px;font-weight:600;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);padding:9px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;line-height:1.2}
+button:hover,.btn:hover{border-color:var(--faint)}
+.primary{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important}
+.dark{background:var(--ink)!important;border-color:var(--ink)!important;color:#fff!important}
+.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.ghost:hover{color:var(--ink);border-color:transparent}
+.icon{width:38px;height:38px;padding:0;justify-content:center;font-size:18px;border-radius:50%}
+button:disabled{opacity:.4;cursor:default}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line-2);border-radius:9px;padding:8px 10px;min-width:0;width:100%}
+input:hover,select:hover{border-color:var(--faint)}
+input::placeholder{color:var(--faint)}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted);font-weight:500}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:16px}
+
+.stats{display:grid;grid-template-columns:1.4fr 1fr 1fr}
+.stat{padding:20px 22px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line)}
+.stat .v{font-family:var(--mono);font-size:28px;font-weight:500;letter-spacing:-.03em;line-height:1.15}
+.stat.lead .v{font-size:44px}
+.stat .s{font-size:14px;color:var(--muted)}
+@media (max-width:640px){.stats{grid-template-columns:1fr 1fr}.stat.lead{grid-column:1/-1;border-bottom:1px solid var(--line)}.stat+.stat{border-left:0}.stat:last-child{border-left:1px solid var(--line)}}
+
+.todaybar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:16px 22px}
+.todaybar .t{font-weight:600}
+.todaybar .live{color:var(--muted);font-size:15px;margin-right:auto}
+
+.weeknav{display:flex;align-items:center;gap:8px;padding:14px 16px 14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.weeknav .wk{font-weight:700;font-size:18px}
+.weeknav .rng{color:var(--muted);font-size:15px;margin-right:auto}
+.dhead,.day,.wfoot{display:grid;grid-template-columns:minmax(92px,1.1fr) repeat(3,minmax(0,.9fr)) minmax(0,1.2fr) minmax(0,.7fr) minmax(0,.8fr);gap:10px;align-items:center;padding:10px 16px 10px 22px}
+.dhead{padding-block:10px 4px}
+.dhead span{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.dhead .r,.day .r{text-align:right}
+.day{border-top:1px solid var(--line)}
+.day:first-of-type{border-top:0}
+.day .dn{display:flex;flex-direction:column;line-height:1.2}
+.day .dn b{font-weight:600}
+.day .dn small{color:var(--muted);font-size:13px}
+.day input,.day select{padding:7px 8px}
+.day input[type=time]{font-family:var(--mono);font-size:15px}
+.day.we{background:#fbfbfc}
+.day.we .dn b{color:var(--muted)}
+.day.today{background:var(--today);box-shadow:inset 3px 0 0 var(--accent)}
+.day.abs input{opacity:.45}
+.day .net{font-family:var(--mono);font-size:15px}
+.chip{display:inline-block;font-family:var(--mono);font-size:14px;padding:3px 9px;border-radius:99px;min-width:62px;text-align:center}
+.chip.pos{background:var(--pos-soft)} .chip.neg{background:var(--neg-soft)} .chip.zero{color:var(--faint)}
+.miss{font-size:12px;color:var(--neg);font-weight:600}
+.wfoot{padding:14px 16px 16px 22px;border-top:1px solid var(--line-2);font-weight:600}
+.lbl-m{display:none}
+@media (max-width:720px){
+  .dhead{display:none}
+  .day,.wfoot{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"dn net flx" "st en pa" "ab ab ab";row-gap:8px;padding:14px 16px}
+  .day .dn{grid-area:dn}.day .st{grid-area:st}.day .en{grid-area:en}.day .pa{grid-area:pa}.day .ab{grid-area:ab}.day .net{grid-area:net}.day .flx{grid-area:flx}
+  .lbl-m{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .wfoot{grid-template-areas:"a b c"}.wfoot .hide-m{display:none}
+}
+
+.chartbox{position:relative;padding:8px 10px 6px}
+.chartbox svg{display:block;width:100%;height:240px;overflow:visible}
+.chartbox text{font-family:var(--font);font-size:12px;fill:var(--muted)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;font-size:13px;padding:6px 10px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-110%)}
+.tip b{font-family:var(--mono);font-weight:500}
+.tframe{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:11px 14px;border-top:1px solid var(--line);text-align:left;white-space:nowrap;font-size:15px}
+thead th{border-top:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding-block:12px 8px}
+td.r,th.r{text-align:right}
+tbody tr{cursor:pointer} tbody tr:hover td{background:var(--bg)}
+tr.fut td{color:var(--faint)}
+.bar{display:inline-block;height:8px;border-radius:4px;vertical-align:middle}
+.empty{padding:40px 22px;text-align:center;color:var(--muted)}
+.empty p{max-width:46ch;margin:6px auto}
+.note{font-size:14.5px;color:var(--muted);margin:0;max-width:68ch}
+.box{background:var(--accent-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+details summary{cursor:pointer;font-weight:600;font-size:15px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;font-size:15px;z-index:30;max-width:calc(100% - 32px)}
+.status{font-size:13px;color:var(--faint);text-align:center;margin:0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--faint);margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--pos)} .dot.err{background:var(--neg)} .dot.busy{background:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.day,.chip{transition:background .15s}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="hrow">
+      <div class="brand"><i></i>Flexregnskab</div>
+      <nav aria-label="Visninger">
+        <a href="#uge" data-v="uge">Uge</a>
+        <a href="#overblik" data-v="overblik">Overblik</a>
+        <a href="#indstillinger" data-v="indstillinger">Indstillinger</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- UGE -->
+  <section class="view" id="v-uge">
+    <div class="card pad row spread" id="fileBanner" hidden style="background:var(--accent-soft);border-color:var(--accent-soft)">
+      <span>Forbind til <b id="fileBannerName"></b> for at hente dine seneste registreringer.</span>
+      <button class="primary" onclick="FileSync.reconnect()">Forbind</button>
+    </div>
+    <div class="card stats" id="stats"></div>
+    <div class="card todaybar" id="todaybar"></div>
+    <div class="card">
+      <div class="weeknav">
+        <span class="wk" id="wkNo"></span><span class="rng" id="wkRange"></span>
+        <button class="ghost" id="thisWeek">I dag</button>
+        <button class="icon" id="prevW" aria-label="Forrige uge">‹</button>
+        <button class="icon" id="nextW" aria-label="Næste uge">›</button>
+      </div>
+      <div class="dhead"><span>Dag</span><span>Mødt</span><span>Gået</span><span>Pause</span><span>Fravær</span><span class="r">Netto</span><span class="r">Flex</span></div>
+      <div id="days"></div>
+      <div class="wfoot" id="wfoot"></div>
+    </div>
+    <p class="status" id="mode"></p>
+  </section>
+
+  <!-- OVERBLIK -->
+  <section class="view" id="v-overblik" hidden>
+    <div class="row spread">
+      <h2 style="font-size:22px;font-weight:700" id="ovTitle">Overblik</h2>
+      <select id="yearSel" style="width:auto" aria-label="År"></select>
+    </div>
+    <div class="card stats" id="ovStats"></div>
+    <div class="card">
+      <div class="pad" style="padding-bottom:0"><span class="label">Flexsaldo gennem året</span></div>
+      <div class="chartbox" id="chart"></div>
+    </div>
+    <div class="card"><div class="tframe"><table id="monthTbl"></table></div></div>
+  </section>
+
+  <!-- INDSTILLINGER -->
+  <section class="view" id="v-indstillinger" hidden>
+    <div class="card pad" id="syncCard" style="display:flex;flex-direction:column;gap:14px">
+      <h2>Konto og lagring</h2>
+      <div id="syncBody"></div>
+    </div>
+    <div class="card pad" style="display:flex;flex-direction:column;gap:18px">
+      <h2>Udgangspunkt</h2>
+      <div class="fields">
+        <label class="f">Navn<input id="s-name" autocomplete="name"></label>
+        <label class="f">Regnskab starter<input id="s-startDate" type="date"></label>
+        <label class="f">Flexsaldo på startdagen (timer)<input id="s-startFlex" inputmode="decimal" class="n"></label>
+        <label class="f">Feriedage pr. år<input id="s-ferieDays" inputmode="decimal" class="n"></label>
+      </div>
+    </div>
+    <div class="card pad" style="display:flex;flex-direction:column;gap:18px">
+      <h2>Arbejdstid</h2>
+      <div class="fields" id="normFields" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,110px),1fr))"></div>
+      <div class="fields">
+        <label class="f">Pause ved over 6 timer (min)<input id="s-p6" inputmode="numeric" class="n"></label>
+        <label class="f">Pause ved over 9 timer (min)<input id="s-p9" inputmode="numeric" class="n"></label>
+      </div>
+      <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
+    </div>
+    <div class="card pad" style="display:flex;flex-direction:column;gap:16px">
+      <h2>Data</h2>
+      <div class="row">
+        <button class="dark" id="xlsxBtn">Hent som Excel</button>
+        <button id="jsonBtn">Hent backup</button>
+        <label class="btn" for="restoreFile">Gendan backup</label>
+        <input id="restoreFile" type="file" accept=".json,application/json" hidden>
+        <label class="btn" for="xlsFile">Importer fra Excel</label>
+        <input id="xlsFile" type="file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+      </div>
+      <div id="restoreBox"></div>
+      <div id="xlsBox"></div>
+      <details>
+        <summary>Sådan regnes der</summary>
+        <ul class="note" style="padding-left:18px;margin-top:10px;display:flex;flex-direction:column;gap:4px">
+          <li>Netto = gået − mødt − pause. Skriver du ingen pause, bruges den automatiske ud fra arbejdstiden.</li>
+          <li>Arbejder du 6 timer eller mindre (fx en kort fredag), trækkes der ingen frokostpause. Skriv 0 i pausefeltet, hvis du har sprunget frokosten over på en længere dag.</li>
+          <li>Flex = netto − normtid. Weekender har normtid 0.</li>
+          <li>Ferie, Syg og Fri giver normtid 0, så saldoen står stille. Flexfri trækker hele dagens normtid.</li>
+          <li>En hverdag uden registrering tæller som minus hele normtiden og markeres med "mangler". Fremtidige dage og i dag tæller først, når du har skrevet hvornår du gik.</li>
+        </ul>
+      </details>
+    </div>
+    <p class="status" id="appVersion"></p>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ---------- config ---------- */
+const APP_VERSION='1.0.0';
+const CFG=Object.assign({msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
+const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
+const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const SCOPES=['User.Read','Files.ReadWrite'];
+
+/* ---------- helpers ---------- */
+const WD=['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
+const WDL=['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag'];
+const MONTHS=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+const ABS=[['','Arbejde'],['Ferie','Ferie'],['Syg','Syg'],['Flexfri','Flexfri'],['Fri','Fri / helligdag']];
+const NOW_Y=new Date().getFullYear();
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const isoOf=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
+const parseIso=iso=>{const [y,m,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};
+const isoD=dt=>dt.toISOString().slice(0,10);
+const addDays=(iso,n)=>{const d=parseIso(iso);d.setUTCDate(d.getUTCDate()+n);return isoD(d)};
+const wdOf=iso=>(parseIso(iso).getUTCDay()+6)%7;
+const todayISO=()=>{const d=new Date();return isoOf(d.getFullYear(),d.getMonth(),d.getDate())};
+const mondayOf=iso=>addDays(iso,-wdOf(iso));
+function isoWeek(iso){const d=parseIso(iso);d.setUTCDate(d.getUTCDate()+3-((d.getUTCDay()+6)%7));const y=new Date(Date.UTC(d.getUTCFullYear(),0,4));return 1+Math.round(((d-y)/864e5-3+((y.getUTCDay()+6)%7))/7)}
+const toMin=t=>{if(!t)return null;const m=/^(\d{1,2})[:.](\d{2})$/.exec(t);return m?(+m[1])*60+(+m[2]):null};
+const minToT=m=>`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
+const pnum=v=>{if(v==null||v==='')return null;const n=parseFloat(String(v).trim().replace(/−/g,'-').replace(',','.'));return isFinite(n)?n:null};
+const f2=n=>n==null?'':(Math.abs(n)<0.005?0:n).toFixed(2).replace('.',',');
+const fs=n=>n==null?'':(n>0.004?'+':n<-0.004?'−':'')+f2(Math.abs(n));
+const sgn=n=>n>0.004?'pos':n<-0.004?'neg':'';
+const hm=h=>{const m=Math.round(Math.abs(h)*60);return `${h<0?'−':''}${Math.floor(m/60)}:${pad(m%60)}`};
+const clock=t=>{const d=new Date(t);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
+function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Kunne ikke hente '+src.split('/').pop()+'. Er du online?'));document.head.appendChild(s)})}
+const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],p6:30,p9:45};
+
+/* ---------- state + local storage ---------- */
+const S={settings:{...DEF},months:{},rows:{},updatedAt:0};
+const rebuildRows=()=>{S.rows={};for(const k in S.months)Object.assign(S.rows,S.months[k]||{})};
+const monthKey=iso=>'rows-'+iso.slice(0,7);
+const LS='flexregnskab-data';
+function normSettings(st){const s={...DEF,...(st||{})};if(st&&st.ferieDays==null&&st.startFerie!=null)s.ferieDays=st.startFerie;return s}
+const Store={
+  load(){try{const raw=JSON.parse(localStorage.getItem(LS)||'null');if(raw){S.settings=normSettings(raw.settings);S.months=raw.months||{};S.updatedAt=raw.updatedAt||0;}}catch(e){}rebuildRows()},
+  snapshot(){return{app:'flexregnskab',v:3,updatedAt:S.updatedAt,settings:S.settings,months:S.months}},
+  persist(touch=true){if(touch)S.updatedAt=Date.now();
+    try{localStorage.setItem(LS,JSON.stringify(this.snapshot()))}catch(e){toast('Kunne ikke gemme på enheden.')}
+    if(touch){Cloud.schedule();FileSync.schedule();}},
+  apply(d){S.settings=normSettings(d.settings);S.months=d.months||{};S.updatedAt=d.updatedAt||Date.now();rebuildRows();this.persist(false);renderAll()},
+  saveSettings(o){S.settings={...o};this.persist();renderAll();return Promise.resolve()},
+  saveMonth(key,rows){if(!rows||!Object.keys(rows).length)delete S.months[key];else S.months[key]=rows;rebuildRows();this.persist();renderAll();return Promise.resolve()}
+};
+
+/* ---------- cloud: each person's own OneDrive (SharePoint) via Microsoft login ---------- */
+const Cloud={app:null,account:null,state:'off',last:null,timer:null,busy:false,pending:false,err:'',
+  enabled(){return !!CFG.msClientId},
+  url(){return 'https://graph.microsoft.com/v1.0/me/drive/root:/'+CFG.cloudFile.split('/').map(encodeURIComponent).join('/')+':/content'},
+  async init(){
+    if(!this.enabled()){renderSync();return}
+    try{
+      await loadScript(MSAL_URL);
+      this.app=new msal.PublicClientApplication({auth:{clientId:CFG.msClientId,authority:'https://login.microsoftonline.com/'+CFG.msTenant,redirectUri:location.origin+location.pathname},cache:{cacheLocation:'localStorage'}});
+      const r=await this.app.handleRedirectPromise();
+      this.account=(r&&r.account)||this.app.getAllAccounts()[0]||null;
+      if(r&&location.hash.length>1&&!VIEWS.includes(location.hash.slice(1)))history.replaceState(null,'',location.pathname);
+      if(this.account)await this.pull();else this.set('out');
+    }catch(e){this.set('error',e)}
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')this.pull()});
+    window.addEventListener('online',()=>{this.pending?this.push():this.pull()});
+  },
+  login(){if(this.app)this.app.loginRedirect({scopes:SCOPES,prompt:'select_account'})},
+  logout(){if(this.app&&this.account)this.app.logoutRedirect({account:this.account,postLogoutRedirectUri:location.origin+location.pathname})},
+  async token(){
+    try{return(await this.app.acquireTokenSilent({scopes:SCOPES,account:this.account})).accessToken}
+    catch(e){if(e instanceof msal.InteractionRequiredAuthError){await this.app.acquireTokenRedirect({scopes:SCOPES,account:this.account})}throw e}
+  },
+  async pull(){
+    if(!this.account||this.busy)return;this.busy=true;this.set('busy');
+    try{
+      const res=await fetch(this.url(),{headers:{Authorization:'Bearer '+await this.token()},cache:'no-store'});
+      if(res.status===404){this.busy=false;return this.push()}
+      if(!res.ok)throw new Error('OneDrive svarede '+res.status);
+      const d=await res.json();
+      const remote=(d&&d.app==='flexregnskab'&&d.updatedAt)||0;
+      if(remote>(S.updatedAt||0)){Store.apply(d)}
+      else if((S.updatedAt||0)>remote){this.busy=false;return this.push()}
+      this.last=Date.now();this.set('ok');
+    }catch(e){this.set(navigator.onLine?'error':'offline',e)}
+    this.busy=false;
+  },
+  schedule(){if(!this.account)return;this.pending=true;this.set('pending');clearTimeout(this.timer);this.timer=setTimeout(()=>this.push(),1500)},
+  async push(){
+    if(!this.account)return;if(this.busy){this.schedule();return}
+    this.busy=true;this.set('busy');
+    try{
+      const res=await fetch(this.url(),{method:'PUT',headers:{Authorization:'Bearer '+await this.token(),'Content-Type':'application/json'},body:JSON.stringify(Store.snapshot())});
+      if(!res.ok)throw new Error('OneDrive svarede '+res.status);
+      this.pending=false;this.last=Date.now();this.set('ok');
+    }catch(e){this.set(navigator.onLine?'error':'offline',e)}
+    this.busy=false;
+  },
+  set(s,e){this.state=s;if(e)this.err=e.message||String(e);renderSync()}
+};
+function renderSync(){
+  const c=Cloud,who=c.account?(c.account.name||c.account.username):'';
+  const line={off:'Gemt på denne enhed',out:'Gemt på denne enhed · log ind under Indstillinger for at gemme i OneDrive',
+    pending:'Gemmer i OneDrive…',busy:'Synkroniserer med OneDrive…',ok:`Gemt i OneDrive kl. ${c.last?clock(c.last):''}`,
+    offline:'Offline · gemt på enheden, sendes til OneDrive når du er online igen',error:'Kunne ikke nå OneDrive · gemt på enheden'}[c.state]||'';
+  const dot={ok:'ok',error:'err',busy:'busy',pending:'busy'}[c.state]||'';
+  // file-based storage (OneDrive folder on this computer)
+  const F=FileSync,fname=F.handle?F.handle.name:'';
+  const fline={ok:`Gemt i ${fname} kl. ${F.last?clock(F.last):''}`,busy:`Gemmer i ${fname}…`,needperm:`Ikke forbundet til ${fname} endnu`,error:`Kunne ikke bruge ${fname}`}[F.state];
+  const fdot={ok:'ok',busy:'busy',error:'err'}[F.state]||'';
+  if(fline)$('mode').innerHTML=`<span class="dot ${fdot}"></span>${esc(fline)}`;
+  else $('mode').innerHTML=`<span class="dot ${dot}"></span>${esc(c.enabled()?line:'Gemt i denne browser')}`;
+  $('fileBanner').hidden=F.state!=='needperm';
+  $('fileBannerName').textContent=fname;
+  let fb;
+  if(!F.supported)fb=`<p class="note">En datafil i OneDrive kræver Chrome eller Edge på en computer. Her gemmes dine data i browseren.</p>`;
+  else if(!F.handle)fb=`<p class="note">Gem dine registreringer i en fil i din OneDrive-mappe på computeren. OneDrive tager sig af resten, og filen kan også åbnes i Excel. Læg filen i samme mappe som appen.</p>
+    <div class="row"><button class="primary" id="fNew">Opret datafil</button><button id="fPick">Vælg eksisterende fil</button></div>`;
+  else fb=`<div class="row spread"><div><div><b>${esc(fname)}</b></div><div class="note"><span class="dot ${fdot}"></span>${esc(fline||'')}</div></div>
+    <div class="row">${F.state==='needperm'?'<button class="primary" id="fPerm">Forbind</button>':'<button id="fRead">Hent nu</button>'}<button class="ghost" id="fPick">Skift fil</button><button class="ghost" id="fOff">Afbryd</button></div></div>
+    ${F.state==='error'?`<p class="note neg">${esc(F.err)}</p>`:''}`;
+  let body=`<h3 class="label" style="margin:0">Datafil i OneDrive</h3>${fb}`;
+  if(!c.enabled()){$('syncBody').innerHTML=body;bindSync();return}
+  body+=`<h3 class="label" style="margin:8px 0 0">Microsoft-login</h3>`;
+  if(!c.account)body+=`<p class="note">Log ind med din arbejdskonto, så gemmes dine registreringer i din egen OneDrive og følger dig mellem telefon og computer. Kun du kan se dem.</p><div class="row"><button class="primary" id="loginBtn">Log ind med Microsoft</button></div>${c.state==='error'?`<p class="note neg">${esc(c.err)}</p>`:''}`;
+  else body+=`<div class="row spread"><div><div><b>${esc(who)}</b></div><div class="note"><span class="dot ${dot}"></span>${esc(line)}</div></div><div class="row"><button id="syncBtn">Synkroniser nu</button><button class="ghost" id="logoutBtn">Log ud</button></div></div>
+    <p class="note">Gemmes i din OneDrive under <span class="n">${esc(CFG.cloudFile)}</span>.</p>${c.state==='error'?`<p class="note neg">${esc(c.err)}</p>`:''}`;
+  $('syncBody').innerHTML=body;bindSync();
+}
+function bindSync(){
+  const c=Cloud,F=FileSync,on=(id,fn)=>{const b=$(id);if(b)b.onclick=fn};
+  on('loginBtn',()=>c.login());on('logoutBtn',()=>c.logout());on('syncBtn',()=>c.pull());
+  on('fNew',()=>F.create());on('fPick',()=>F.choose());on('fPerm',()=>F.reconnect());on('fRead',()=>F.read(true));on('fOff',()=>F.disconnect());
+}
+
+/* ---------- datafil (CSV) i OneDrive-mappen: File System Access API, Chrome/Edge på computer ---------- */
+const IDB={db:null,
+  open(){return this.db||(this.db=new Promise((res,rej)=>{const r=indexedDB.open('flexregnskab',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
+  async get(k){const db=await this.open();return new Promise(res=>{const r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>res(undefined)})},
+  async set(k,v){const db=await this.open();return new Promise(res=>{const t=db.transaction('kv','readwrite');v===undefined?t.objectStore('kv').delete(k):t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>res()})}
+};
+const CSV_TYPES=[{description:'Flexregnskab (CSV)',accept:{'text/csv':['.csv']}}];
+function splitCsv(line,d){const out=[];let cur='',q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];
+    if(q){if(ch==='"'){if(line[i+1]==='"'){cur+='"';i++}else q=false}else cur+=ch}
+    else if(ch==='"')q=true;else if(ch===d){out.push(cur);cur=''}else cur+=ch}
+  out.push(cur);return out.map(s=>s.trim())}
+function toCsv(){
+  const st=S.settings,n=v=>String(v??'').replace('.',','),q=v=>{v=String(v??'');return /[;"\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const L=['#Flexregnskab;1','#navn;'+q(st.name),'#startdato;'+st.startDate,'#startsaldo;'+n(st.startFlex),'#feriedage;'+n(st.ferieDays),
+    '#normtid;'+(st.norm||[]).map(n).join(';'),'#pause6;'+n(st.p6),'#pause9;'+n(st.p9),'Dato;Ugedag;Mødt;Gået;Pause (min);Fravær;Kommentar'];
+  for(const iso of Object.keys(S.rows).sort()){const r=S.rows[iso];L.push([iso,WD[wdOf(iso)],r.start||'',r.end||'',r.pause??'',q(r.absence||''),q(r.comment||'')].join(';'))}
+  return '﻿'+L.join('\r\n')+'\r\n';
+}
+function parseCsv(text){
+  const lines=text.replace(/^﻿/,'').split(/\r?\n/);
+  const hi=lines.findIndex(l=>/^\s*"?dato"?\s*[;,\t]/i.test(l));if(hi<0)return null;
+  const d=[';','\t',','].find(ch=>lines[hi].includes(ch));
+  const st={...S.settings};
+  for(const l of lines.slice(0,hi)){const p=splitCsv(l,d),k=(p[0]||'').replace(/^#/,'').toLowerCase(),v=p.slice(1);
+    if(k==='navn')st.name=v[0]||'';
+    else if(k==='startdato'){const x=xDate(v[0]);if(x)st.startDate=x}
+    else if(k==='startsaldo')st.startFlex=pnum(v[0])??0;
+    else if(k==='feriedage')st.ferieDays=pnum(v[0])??DEF.ferieDays;
+    else if(k==='normtid'){const a=v.slice(0,5).map(pnum);if(a.length===5&&a.every(x=>x!=null))st.norm=a}
+    else if(k==='pause6')st.p6=pnum(v[0])??DEF.p6;
+    else if(k==='pause9')st.p9=pnum(v[0])??DEF.p9;}
+  const c=findCols(splitCsv(lines[hi],d)),months={};
+  if(c.date==null)return null;
+  for(const l of lines.slice(hi+1)){if(!l.trim())continue;
+    const p=splitCsv(l,d),iso=xDate(p[c.date]);if(!iso)continue;
+    const row={},s=c.start!=null?xTime(p[c.start]):null,e=c.end!=null?xTime(p[c.end]):null;
+    if(s)row.start=s;if(e)row.end=e;
+    if(c.pause!=null&&(p[c.pause]||'')!==''){const v=p[c.pause],m=toMin(v)??pnum(v);if(m!=null)row.pause=Math.max(0,Math.round(m))}
+    if(c.absence!=null&&p[c.absence])row.absence=p[c.absence];
+    if(c.comment!=null&&p[c.comment])row.comment=p[c.comment];
+    if(Object.keys(row).length)(months[monthKey(iso)]=months[monthKey(iso)]||{})[iso]=row;}
+  return{settings:normSettings(st),months};
+}
+function decodeText(buf){let t=new TextDecoder('utf-8').decode(buf);if(t.includes('�'))t=new TextDecoder('windows-1252').decode(buf);return t}
+const FileSync={supported:'showOpenFilePicker' in window,handle:null,state:'none',last:null,lastMod:null,timer:null,busy:false,err:'',
+  async init(){
+    if(!this.supported){renderSync();return}
+    try{this.handle=await IDB.get('csvHandle')||null}catch(e){}
+    if(this.handle){const p=await this.handle.queryPermission({mode:'readwrite'});if(p==='granted')await this.read();else this.set('needperm')}
+    else renderSync();
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&this.state==='ok')this.read()});
+  },
+  async create(){
+    try{const h=await showSaveFilePicker({suggestedName:'flexregnskab.csv',types:CSV_TYPES});
+      this.handle=h;await IDB.set('csvHandle',h);this.lastMod=null;await this.write();toast('Datafil oprettet.')}
+    catch(e){if(e.name!=='AbortError')this.set('error',e)}
+  },
+  async choose(){
+    try{const [h]=await showOpenFilePicker({types:CSV_TYPES});
+      if((await h.requestPermission({mode:'readwrite'}))!=='granted'){this.set('error',new Error('Appen fik ikke lov til at gemme i filen.'));return}
+      this.handle=h;await IDB.set('csvHandle',h);this.lastMod=null;await this.read(true,true)}
+    catch(e){if(e.name!=='AbortError')this.set('error',e)}
+  },
+  async reconnect(){
+    try{if((await this.handle.requestPermission({mode:'readwrite'}))==='granted')await this.read();}catch(e){this.set('error',e)}
+  },
+  async disconnect(){this.handle=null;this.state='none';await IDB.set('csvHandle',undefined);renderSync();toast('Datafilen er afbrudt. Data gemmes nu kun i browseren.')},
+  // preferFile: the file wins (when the user picks an existing file); otherwise the newest side wins
+  async read(force=false,preferFile=false){
+    if(!this.handle||this.busy)return;this.busy=true;
+    try{
+      const f=await this.handle.getFile();
+      if(!force&&f.lastModified===this.lastMod){this.busy=false;this.set('ok');return}
+      const d=f.size?parseCsv(decodeText(await f.arrayBuffer())):null;
+      this.busy=false;
+      if(!d){if(f.size){if(preferFile){this.handle=null;await IDB.set('csvHandle',undefined)}throw new Error(f.name+' ligner ikke en datafil fra Flexregnskab, så den er ikke ændret.')}await this.write();return}
+      if(preferFile||f.lastModified>(S.updatedAt||0)){
+        Store.apply({settings:d.settings,months:d.months,updatedAt:f.lastModified});this.lastMod=f.lastModified;this.last=Date.now();this.set('ok');
+      }else await this.write();
+    }catch(e){this.busy=false;this.set('error',e)}
+  },
+  schedule(){if(!this.handle||this.state==='needperm')return;clearTimeout(this.timer);this.timer=setTimeout(()=>this.write(),700)},
+  async write(){
+    if(!this.handle)return;if(this.busy){this.schedule();return}
+    this.busy=true;this.set('busy');
+    try{const w=await this.handle.createWritable();await w.write(toCsv());await w.close();
+      const f=await this.handle.getFile();this.lastMod=f.lastModified;S.updatedAt=Math.max(S.updatedAt,f.lastModified);Store.persist(false);
+      this.last=Date.now();this.busy=false;this.set('ok');}
+    catch(e){this.busy=false;this.set(e.name==='NotAllowedError'?'needperm':'error',e)}
+  },
+  set(s,e){this.state=s;if(e)this.err=e.message||String(e);renderSync()}
+};
+
+/* ---------- calculation ---------- */
+function absClass(a){const k=String(a||'').trim().toLowerCase();if(!k)return'';
+  if(['ferie','feriefridag','vacation'].includes(k))return'ferie';
+  if(['syg','sygdom','sick','sickness'].includes(k))return'syg';
+  if(['flexfri','ukendt fravær','flex leave'].includes(k))return'flexfri';
+  return'fri';}
+let CALC=null,weekStart=mondayOf(todayISO()),viewYear=NOW_Y,builtWeek=null;
+function compute(){
+  const st=S.settings,today=todayISO(),start=st.startDate||DEF.startDate;
+  const ys=[NOW_Y,+start.slice(0,4),...Object.keys(S.rows).map(i=>+i.slice(0,4)),viewYear,+weekStart.slice(0,4)];
+  const from=`${Math.min(...ys)}-01-01`,to=`${Math.max(...ys)}-12-31`;
+  const p6=pnum(st.p6)||0,p9=pnum(st.p9)||0;
+  const map={};let saldo=null;
+  for(let iso=from;iso<=to;iso=addDays(iso,1)){
+    const wd=wdOf(iso),we=wd>=5,r=S.rows[iso]||null,fut=iso>today,isToday=iso===today;
+    const s=toMin(r&&r.start),e=toMin(r&&r.end);
+    const brutto=s!=null&&e!=null&&e>s?(e-s)/60:null;
+    const autoP=brutto==null?0:brutto>9?p9:brutto>6?p6:0;
+    const manual=r&&r.pause!=null&&r.pause!==''?+r.pause:null;
+    const pause=brutto==null?null:(manual!=null?manual:autoP);
+    const netto=brutto==null?0:Math.max(0,brutto-pause/60);
+    const c=absClass(r&&r.absence);
+    const normDay=we?0:(pnum(st.norm&&st.norm[wd])??7.4);
+    const norm=(c==='ferie'||c==='syg'||c==='fri')?0:normDay;
+    const open=(fut||isToday)&&brutto==null&&c!=='flexfri';
+    const flex=open?0:netto-norm;
+    const counts=iso>=start;
+    if(iso===start)saldo=pnum(st.startFlex)||0;
+    if(counts)saldo+=flex;
+    const missing=counts&&!fut&&!isToday&&!we&&!c&&brutto==null;
+    map[iso]={iso,wd,we,fut,isToday,r,s,e,brutto,autoP,manual,pause,netto,norm,flex,c,open,missing,saldo:counts?saldo:null};
+  }
+  CALC=map;return map;
+}
+const saldoNow=()=>{const t=todayISO();return CALC[t]?CALC[t].saldo:null};
+
+/* ---------- Uge ---------- */
+function buildWeek(){
+  builtWeek=weekStart;
+  $('days').innerHTML=[0,1,2,3,4,5,6].map(i=>{const iso=addDays(weekStart,i),d=parseIso(iso);
+    return `<div class="day" id="d-${iso}" data-iso="${iso}">
+      <div class="dn"><b>${WDL[i][0].toUpperCase()+WDL[i].slice(1)}</b><small>${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]}</small></div>
+      <div class="st"><span class="lbl-m">Mødt</span><input type="time" data-k="start" aria-label="Mødt ${WDL[i]}"></div>
+      <div class="en"><span class="lbl-m">Gået</span><input type="time" data-k="end" aria-label="Gået ${WDL[i]}"></div>
+      <div class="pa"><span class="lbl-m">Pause (min)</span><input inputmode="numeric" data-k="pause" class="n" aria-label="Pause i minutter ${WDL[i]}"></div>
+      <div class="ab"><span class="lbl-m">Fravær</span><select data-k="absence" aria-label="Fravær ${WDL[i]}">${ABS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>
+      <div class="net r"></div><div class="flx r"></div></div>`}).join('');
+}
+function refreshWeek(){
+  if(builtWeek!==weekStart)buildWeek();
+  const act=document.activeElement,end=addDays(weekStart,6),a=parseIso(weekStart),b=parseIso(end);
+  $('wkNo').textContent='Uge '+isoWeek(weekStart);
+  $('wkRange').textContent=a.getUTCMonth()===b.getUTCMonth()?`${a.getUTCDate()}.–${b.getUTCDate()}. ${MONTHS[b.getUTCMonth()]} ${b.getUTCFullYear()}`:`${a.getUTCDate()}. ${MONTHS[a.getUTCMonth()].slice(0,3)} – ${b.getUTCDate()}. ${MONTHS[b.getUTCMonth()].slice(0,3)} ${b.getUTCFullYear()}`;
+  let tn=0,tf=0,tnorm=0;
+  for(let i=0;i<7;i++){
+    const iso=addDays(weekStart,i),x=CALC[iso],el=$('d-'+iso),r=x.r||{};
+    el.className='day'+(x.we?' we':'')+(x.isToday?' today':'')+(x.c&&x.c!=='flexfri'?' abs':'');
+    for(const inp of el.querySelectorAll('[data-k]')){if(inp===act)continue;const k=inp.dataset.k;
+      const v=k==='pause'?(r.pause??''):k==='absence'?(ABS.some(o=>o[0]===r.absence)?r.absence:(r.absence?'Fri':'')):(r[k]||'');
+      if(inp.value!==String(v))inp.value=v;}
+    el.querySelector('[data-k=pause]').placeholder=x.brutto!=null&&x.manual==null?String(x.autoP):'auto';
+    el.querySelector('.net').innerHTML=x.brutto!=null?`<span class="net">${f2(x.netto)}</span>`:x.missing?'<span class="miss">mangler</span>':'';
+    el.querySelector('.flx').innerHTML=(x.open||(x.we&&!x.brutto))?'':`<span class="chip ${sgn(x.flex)||'zero'}">${fs(x.flex)}</span>`;
+    tn+=x.netto;tf+=x.flex;tnorm+=x.open?0:x.norm;
+  }
+  $('wfoot').innerHTML=`<span>Ugen</span><span class="hide-m"></span><span class="hide-m"></span><span class="hide-m muted" style="font-weight:500">norm ${f2(tnorm)}</span><span class="hide-m"></span><span class="r n">${f2(tn)}</span><span class="r"><span class="chip ${sgn(tf)||'zero'}">${fs(tf)}</span></span>`;
+  renderStats(tf);renderToday();
+}
+function renderStats(weekFlex){
+  const st=S.settings,sal=saldoNow(),y=NOW_Y,yr=Object.values(CALC).filter(x=>x.iso.startsWith(y+'-'));
+  const fer=yr.filter(x=>x.c==='ferie'&&!x.we).length,ferLeft=(pnum(st.ferieDays)||0)-fer,miss=yr.filter(x=>x.missing).length;
+  $('stats').innerHTML=`<div class="stat lead"><span class="label">Flexsaldo</span><span class="v ${sgn(sal)}">${sal==null?'–':fs(sal)}</span><span class="s">${sal==null?'Regnskabet starter '+st.startDate:`timer · ${hm(sal||0)} t:m`}${miss?` · <span class="neg">${miss} dage mangler</span>`:''}</span></div>`+
+    `<div class="stat"><span class="label">Denne uge</span><span class="v ${sgn(weekFlex)}">${fs(weekFlex)}</span><span class="s">timer flex</span></div>`+
+    `<div class="stat"><span class="label">Ferie tilbage</span><span class="v">${String(ferLeft).replace('.',',')}</span><span class="s">af ${String(pnum(st.ferieDays)||0).replace('.',',')} dage i ${y}</span></div>`;
+}
+function renderToday(){
+  const t=todayISO(),x=CALC[t],r=(x&&x.r)||{},wd=wdOf(t),d=parseIso(t),now=new Date(),nowT=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  let live='',btn='';
+  if(x&&x.c&&x.c!=='flexfri')live=`Registreret som ${String(r.absence).toLowerCase()}.`;
+  else if(!r.start){live=x&&x.we?'Weekend.':'Ikke mødt ind endnu.';btn=`<button class="primary" id="stampIn">Mød ind ${nowT}</button>`;}
+  else if(!r.end){const st=S.settings,h=Math.max(0,(toMin(nowT)-toMin(r.start))/60),p=h>9?+st.p9:h>6?+st.p6:0,net=Math.max(0,h-(r.pause!=null&&r.pause!==''?+r.pause:p)/60),norm=x.we?0:(pnum(st.norm[wd])??7.4);
+    live=`Mødt ${r.start} · <span class="n">${f2(net)}</span> t netto indtil nu`+(norm?` · normtid nået kl. ${minToT(toMin(r.start)+Math.round(norm*60)+(norm>6?+st.p6:0))}`:'');
+    btn=`<button class="dark" id="stampOut">Gå hjem ${nowT}</button>`;}
+  else live=`Mødt ${r.start} · gået ${r.end} · <span class="n">${f2(x.netto)}</span> t netto`;
+  $('todaybar').innerHTML=`<span class="t">I dag, ${WDL[wd]} ${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]}</span><span class="live">${live}</span>${btn}`;
+  const si=$('stampIn'),so=$('stampOut');if(si)si.onclick=()=>stamp('start');if(so)so.onclick=()=>stamp('end');
+}
+async function stamp(k){const t=todayISO(),n=new Date(),v=`${pad(n.getHours())}:${pad(n.getMinutes())}`;
+  await saveDay(t,{...(S.rows[t]||{}),[k]:v});toast(k==='start'?`Mødt ind ${v}`:`Gået hjem ${v}`);}
+async function saveDay(iso,row){
+  const clean={};for(const k of['start','end','pause','absence','comment'])if(row[k]!=null&&row[k]!=='')clean[k]=row[k];
+  const key=monthKey(iso),rows={...(S.months[key]||{})};
+  if(Object.keys(clean).length)rows[iso]=clean;else delete rows[iso];
+  await Store.saveMonth(key,rows);
+}
+const dayTimers={};
+$('days').addEventListener('change',e=>{const inp=e.target.closest('[data-k]');if(!inp)return;
+  const iso=inp.closest('.day').dataset.iso,k=inp.dataset.k,row={...(S.rows[iso]||{})};
+  if(k==='pause'){const p=pnum(inp.value);row.pause=p==null?null:Math.max(0,Math.round(p));}else row[k]=inp.value||null;
+  S.rows[iso]=row;compute();refreshWeek();
+  clearTimeout(dayTimers[iso]);dayTimers[iso]=setTimeout(()=>saveDay(iso,S.rows[iso]),300);
+});
+
+/* ---------- Overblik ---------- */
+function renderOverview(){
+  const st=S.settings,y=viewYear,days=Object.values(CALC).filter(x=>x.iso.startsWith(y+'-'));
+  const years=[...new Set([NOW_Y,...Object.keys(S.rows).map(i=>+i.slice(0,4)),+st.startDate.slice(0,4)])].sort();
+  $('yearSel').innerHTML=years.map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('');
+  $('ovTitle').textContent='Overblik '+y;
+  const past=days.filter(x=>!x.fut&&x.saldo!=null),last=past[past.length-1];
+  const sal=last?last.saldo:null,fer=days.filter(x=>x.c==='ferie'&&!x.we).length,syg=days.filter(x=>x.c==='syg'&&!x.we).length;
+  const net=days.reduce((a,x)=>a+x.netto,0),flexY=days.reduce((a,x)=>a+(x.saldo!=null?x.flex:0),0);
+  $('ovStats').innerHTML=`<div class="stat lead"><span class="label">${y===NOW_Y?'Flexsaldo i dag':'Flexsaldo ultimo'}</span><span class="v ${sgn(sal)}">${sal==null?'–':fs(sal)}</span><span class="s">timer · ${fs(flexY)} i løbet af ${y}</span></div>`+
+    `<div class="stat"><span class="label">Arbejdet</span><span class="v">${Math.round(net).toLocaleString('da-DK')}</span><span class="s">timer netto</span></div>`+
+    `<div class="stat"><span class="label">Fravær</span><span class="v">${fer}<span class="s"> / </span>${syg}</span><span class="s">feriedage / sygedage</span></div>`;
+  drawChart(days.filter(x=>x.saldo!=null&&!x.fut));
+  const months=MONTHS.map((n,m)=>{const md=days.filter(x=>+x.iso.slice(5,7)-1===m),mp=md.filter(x=>!x.fut&&x.saldo!=null);
+    return{n,m,net:md.reduce((a,x)=>a+x.netto,0),flex:md.reduce((a,x)=>a+(x.saldo!=null?x.flex:0),0),fe:md.filter(x=>x.c==='ferie'&&!x.we).length,sy:md.filter(x=>x.c==='syg'&&!x.we).length,end:mp.length?mp[mp.length-1].saldo:null,has:mp.length>0}});
+  const maxF=Math.max(1,...months.map(r=>Math.abs(r.flex)));
+  $('monthTbl').innerHTML=`<thead><tr><th>Måned</th><th class="r">Netto</th><th>Flex</th><th class="r"></th><th class="r">Ferie</th><th class="r">Syg</th><th class="r">Saldo</th></tr></thead><tbody>`+
+    months.map(r=>`<tr class="${r.has?'':'fut'}" data-m="${r.m}"><td>${r.n[0].toUpperCase()+r.n.slice(1)}</td><td class="r n">${r.has?f2(r.net):''}</td>`+
+      `<td style="width:30%">${r.has?`<span class="bar" style="width:${Math.max(2,Math.abs(r.flex)/maxF*100)}%;background:var(--${r.flex<0?'neg':'pos'})"></span>`:''}</td>`+
+      `<td class="r n ${sgn(r.flex)}">${r.has?fs(r.flex):''}</td><td class="r n">${r.fe||''}</td><td class="r n">${r.sy||''}</td><td class="r n">${r.end==null?'':fs(r.end)}</td></tr>`).join('')+'</tbody>';
+}
+function drawChart(pts){
+  const box=$('chart');
+  if(pts.length<2){box.innerHTML=`<div class="empty"><p>Grafen dukker op, når du har registreret et par dage.</p></div>`;return;}
+  const W=Math.max(300,box.clientWidth-20),H=240,L=44,R=14,T=16,B=26,y=viewYear,x0=Date.UTC(y,0,1),x1=Date.UTC(y,11,31);
+  const vals=pts.map(p=>p.saldo);let lo=Math.min(0,...vals),hi=Math.max(0,...vals);
+  const span=hi-lo||1,step=[1,2,5,10,20,25,50,100].find(s=>span/s<=5)||200;lo=Math.floor(lo/step)*step;hi=Math.ceil(hi/step)*step;if(hi===lo)hi=lo+step;
+  const X=iso=>L+(parseIso(iso)-x0)/(x1-x0)*(W-L-R),Y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  let g='';
+  for(let v=lo;v<=hi+1e-9;v+=step)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?'#c9cfd8':'#eef0f3'}" stroke-width="1"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end">${v>0?'+':''}${v}</text>`;
+  for(let m=0;m<12;m++)g+=`<text x="${X(isoOf(y,m,15))}" y="${H-6}" text-anchor="middle">${MONTHS[m][0].toUpperCase()+MONTHS[m].slice(1,3)}</text>`;
+  const line=pts.map((p,i)=>`${i?'L':'M'}${X(p.iso).toFixed(1)},${Y(p.saldo).toFixed(1)}`).join('');
+  const area=line+`L${X(pts[pts.length-1].iso).toFixed(1)},${Y(0)}L${X(pts[0].iso).toFixed(1)},${Y(0)}Z`,lp=pts[pts.length-1];
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Flexsaldo gennem ${y}, senest ${fs(lp.saldo)} timer">
+    <defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2f5bd3" stop-opacity=".16"/><stop offset="1" stop-color="#2f5bd3" stop-opacity=".02"/></linearGradient></defs>
+    ${g}<path d="${area}" fill="url(#ga)"/><path d="${line}" fill="none" stroke="#2f5bd3" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${X(lp.iso)}" cy="${Y(lp.saldo)}" r="5" fill="#2f5bd3" stroke="#fff" stroke-width="2"/>
+    <g id="hov" style="display:none"><line id="hl" y1="${T}" y2="${H-B}" stroke="#151a21" stroke-opacity=".25"/><circle id="hc" r="5" fill="#2f5bd3" stroke="#fff" stroke-width="2"/></g>
+    <rect x="${L}" y="0" width="${W-L-R}" height="${H}" fill="transparent" id="hit"/></svg><div class="tip" id="tip" hidden></div>`;
+  const hit=$('hit'),hov=$('hov'),tip=$('tip');
+  const move=ev=>{const rect=box.querySelector('svg').getBoundingClientRect(),px=(ev.clientX-rect.left)*(W/rect.width);
+    let best=pts[0],bd=1e9;for(const p of pts){const d=Math.abs(X(p.iso)-px);if(d<bd){bd=d;best=p}}
+    const cx=X(best.iso),cy=Y(best.saldo);hov.style.display='';$('hl').setAttribute('x1',cx);$('hl').setAttribute('x2',cx);$('hc').setAttribute('cx',cx);$('hc').setAttribute('cy',cy);
+    const d=parseIso(best.iso);tip.hidden=false;tip.innerHTML=`${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]} · <b>${fs(best.saldo)}</b> t`;
+    tip.style.left=Math.min(Math.max(cx*rect.width/W+10,70),rect.width-60)+'px';tip.style.top=(cy*rect.height/H+8)+'px';};
+  hit.addEventListener('pointermove',move);hit.addEventListener('pointerdown',move);
+  hit.addEventListener('pointerleave',()=>{hov.style.display='none';tip.hidden=true});
+}
+
+/* ---------- Indstillinger ---------- */
+const SF=['name','startDate','startFlex','ferieDays','p6','p9'];
+function fillSettings(){
+  const st=S.settings,act=document.activeElement;
+  if(!$('normFields').children.length)$('normFields').innerHTML=WD.slice(0,5).map((n,i)=>`<label class="f">${n}<input id="s-norm${i}" inputmode="decimal" class="n"></label>`).join('');
+  for(const f of SF){const el=$('s-'+f);if(el===act)continue;const v=st[f];el.value=['startFlex','ferieDays'].includes(f)?String(v??'').replace('.',','):(v??'');}
+  for(let i=0;i<5;i++){const el=$('s-norm'+i);if(el!==act)el.value=f2(pnum(st.norm&&st.norm[i])??7.4);}
+}
+let sT=null;
+function settingsChanged(){clearTimeout(sT);$('saveState').textContent='Gemmer…';
+  sT=setTimeout(async()=>{const st={...S.settings};
+    for(const f of SF){const v=$('s-'+f).value;st[f]=['startFlex','ferieDays','p6','p9'].includes(f)?(pnum(v)??0):v.trim();}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(st.startDate))st.startDate=DEF.startDate;
+    st.norm=[0,1,2,3,4].map(i=>pnum($('s-norm'+i).value)??7.4);
+    await Store.saveSettings(st);$('saveState').textContent='Gemt.';},600);}
+
+/* ---------- export / backup ---------- */
+function offer(filename,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+async function exportXlsx(){
+  const b=$('xlsxBtn');b.disabled=true;b.textContent='Laver Excel…';
+  try{
+    if(!window.XLSX)await loadScript(XLSX_URL);
+    const y=viewYear,r2=n=>n==null?'':Math.round(n*100)/100,days=Object.values(CALC).filter(x=>x.iso.startsWith(y+'-'));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Dato','Ugedag','Mødt','Gået','Pause (min)','Fravær','Kommentar','Brutto','Netto','Normtid','Flex +/-','Flexsaldo'],
+      ...days.map(x=>[x.iso,WD[x.wd],x.r&&x.r.start||'',x.r&&x.r.end||'',x.manual??'',x.r&&x.r.absence||'',x.r&&x.r.comment||'',r2(x.brutto),x.brutto==null?'':r2(x.netto),r2(x.norm),x.open?'':r2(x.flex),r2(x.saldo)])]),'Registrering');
+    const ov=[['Måned','Netto','Flex +/-','Ferie','Syg']];
+    MONTHS.forEach((n,m)=>{const md=days.filter(x=>+x.iso.slice(5,7)-1===m);ov.push([n,r2(md.reduce((a,x)=>a+x.netto,0)),r2(md.reduce((a,x)=>a+(x.saldo!=null?x.flex:0),0)),md.filter(x=>x.c==='ferie'&&!x.we).length,md.filter(x=>x.c==='syg'&&!x.we).length])});
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ov),'Måneder');
+    const st=S.settings;
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Navn',st.name],['Regnskab starter',st.startDate],['Startsaldo',pnum(st.startFlex)],['Feriedage',pnum(st.ferieDays)],['Normtid man-fre',...st.norm],['Pause >6 t',+st.p6],['Pause >9 t',+st.p9]]),'Indstillinger');
+    offer(`Flexregnskab ${y}.xlsx`,new Blob([XLSX.write(wb,{type:'array',bookType:'xlsx'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }catch(e){toast(e.message||'Excel-filen kunne ikke laves.')}
+  b.disabled=false;b.textContent='Hent som Excel';
+}
+
+/* ---------- import from Excel ---------- */
+const HD={date:['dato','date'],start:['start','mødt','ind','kommet','in'],end:['slut','gået','ud','out'],comment:['kommentar','note','noter','bemærkning']};
+function findCols(row){const c={};let sp=0;
+  row.forEach((v,i)=>{const h=String(v??'').toLowerCase().replace(/\s+/g,' ').trim();if(!h)return;
+    if(c.date==null&&HD.date.includes(h))c.date=i;
+    else if(c.start==null&&HD.start.includes(h))c.start=i;
+    else if(c.end==null&&HD.end.includes(h))c.end=i;
+    else if(c.pause==null&&h.startsWith('pause')&&!h.includes('kontrol'))c.pause=i;
+    else if(c.absence==null&&h.includes('fravær')&&!h.includes('andet'))c.absence=i;
+    else if(c.comment==null&&HD.comment.includes(h))c.comment=i;
+    if(h.includes('saldo')&&!h.includes('diff')){const p=h.startsWith('flexsaldo')?3:h.includes('system')?2:1;if(p>sp){sp=p;c.saldo=i}}
+  });return c;}
+function xDate(v){if(v==null||v==='')return null;
+  if(typeof v==='number'){const p=XLSX.SSF.parse_date_code(v);return p&&p.y>1990?isoOf(p.y,p.m-1,p.d):null}
+  const s=String(v).trim();let m;
+  if((m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s)))return isoOf(+m[1],+m[2]-1,+m[3]);
+  if((m=/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/.exec(s))){let y=+m[3];if(y<100)y+=2000;return isoOf(y,+m[2]-1,+m[1])}
+  return null}
+function xTime(v){if(v==null||v==='')return null;
+  if(typeof v==='number'){const f=v>=1?v-Math.floor(v):v,min=Math.round(f*1440);return min>0&&min<1440?minToT(min):null}
+  const m=/(\d{1,2})[:.](\d{2})/.exec(String(v));return m&&+m[1]<24?`${pad(+m[1])}:${m[2]}`:null}
+function xPause(v){if(v==null||v==='')return null;
+  if(typeof v==='number'){const n=v>0&&v<1?Math.round(v*1440):Math.round(v);return n>0?n:null}
+  const t=toMin(String(v).trim());if(t!=null)return t||null;const n=pnum(v);return n>0?Math.round(n):null}
+function readSheet(wb){
+  let best=null;
+  for(const name of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    for(let i=0;i<Math.min(rows.length,20);i++){const c=findCols(rows[i]||[]);
+      if(c.date==null||(c.start==null&&c.absence==null))continue;
+      const score=Object.keys(c).length+(/import/i.test(name)?10:0);
+      if(!best||score>best.score)best={name,rows,hr:i,c,score};break;}
+  }
+  if(!best)return null;
+  const {rows,hr,c}=best,seen=new Map();
+  for(const raw of rows.slice(hr+1)){if(!raw)continue;
+    const iso=xDate(raw[c.date]);if(!iso)continue;
+    const start=c.start!=null?xTime(raw[c.start]):null,end=c.end!=null?xTime(raw[c.end]):null;
+    const absRaw=c.absence!=null&&raw[c.absence]!=null?String(raw[c.absence]).trim():'';
+    let comment=c.comment!=null&&raw[c.comment]!=null?String(raw[c.comment]).trim():'';
+    const cl=absClass(absRaw),absence={ferie:'Ferie',syg:'Syg',flexfri:'Flexfri',fri:'Fri'}[cl]||'';
+    if(cl==='fri'&&absRaw.toLowerCase()!=='fri')comment=comment?absRaw+' · '+comment:absRaw;
+    const pause=c.pause!=null?xPause(raw[c.pause]):null;
+    const saldo=c.saldo!=null&&raw[c.saldo]!=null&&raw[c.saldo]!==''?pnum(raw[c.saldo]):null;
+    if(!start&&!end&&!absence&&!comment)continue;
+    seen.set(iso,{iso,row:{start,end,pause,absence,comment},saldo});
+  }
+  return{sheet:best.name,cols:c,entries:[...seen.values()].sort((a,b)=>a.iso<b.iso?-1:1)};
+}
+let xlsPending=null;
+async function handleXls(f){
+  const box=$('xlsBox');box.innerHTML='<p class="note">Læser '+esc(f.name)+'…</p>';
+  try{
+    if(!window.XLSX)await loadScript(XLSX_URL);
+    const wb=/\.csv$/i.test(f.name)?XLSX.read(await f.text(),{type:'string'}):XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array'});
+    const res=readSheet(wb);
+    if(!res||!res.entries.length){box.innerHTML='<p class="note neg">Fandt ingen dage. Arket skal have en kolonne der hedder Dato og en der hedder Start/Mødt eller Fraværsårsag.</p>';return;}
+    xlsPending=res;
+    const E=res.entries,a=parseIso(E[0].iso),b=parseIso(E[E.length-1].iso),rep=E.filter(e=>S.rows[e.iso]).length;
+    const fd=d=>`${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`,firstS=E.find(e=>e.saldo!=null);
+    box.innerHTML=`<div class="box"><div><b>${E.length} dage</b> fra arket “${esc(res.sheet)}”, ${fd(a)} – ${fd(b)}.${rep?` ${rep} af dem erstatter dage du allerede har.`:''}
+      <div class="note">Dage uden tider eller fravær er sprunget over.</div></div>
+      ${firstS?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="xlsSaldo" checked style="width:auto"> Lad regnskabet starte ${fd(parseIso(firstS.iso))} og brug arkets saldo (${fs(firstS.saldo)} t)</label>`:''}
+      <div class="row"><button class="primary" id="xlsGo">Importer ${E.length} dage</button><button class="ghost" id="xlsCancel">Annuller</button></div></div>`;
+    $('xlsCancel').onclick=()=>{xlsPending=null;box.innerHTML=''};
+    $('xlsGo').onclick=doXlsImport;
+  }catch(e){box.innerHTML='<p class="note neg">Filen kunne ikke læses. Gem den som .xlsx og prøv igen.</p>'}
+}
+async function doXlsImport(){
+  const res=xlsPending;if(!res)return;const useSaldo=$('xlsSaldo')&&$('xlsSaldo').checked;
+  for(const {iso,row} of res.entries){const k=monthKey(iso);S.months[k]=S.months[k]||{};
+    const clean={};for(const f in row)if(row[f]!=null&&row[f]!=='')clean[f]=row[f];S.months[k][iso]=clean;}
+  rebuildRows();
+  if(useSaldo){const first=res.entries.find(e=>e.saldo!=null);compute();const own=CALC[first.iso]?CALC[first.iso].flex:0;
+    S.settings={...S.settings,startDate:first.iso,startFlex:Math.round((first.saldo-own)*100)/100};}
+  Store.persist();
+  xlsPending=null;$('xlsBox').innerHTML=`<p class="note pos">${res.entries.length} dage importeret.</p>`;
+  const last=res.entries[res.entries.length-1].iso;weekStart=mondayOf(last);viewYear=+last.slice(0,4);renderAll();
+  toast('Importeret. Se dem under Uge og Overblik.');
+}
+
+/* ---------- routing & render ---------- */
+const VIEWS=['uge','overblik','indstillinger'];
+function route(){const v=VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'uge';
+  for(const x of VIEWS)$('v-'+x).hidden=x!==v;
+  document.querySelectorAll('nav a').forEach(a=>a.dataset.v===v?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'));
+  if(v==='overblik')renderOverview();}
+function renderAll(){compute();refreshWeek();if(!$('v-overblik').hidden)renderOverview();fillSettings();}
+
+window.addEventListener('hashchange',route);
+let rT=null;window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(()=>{if(!$('v-overblik').hidden)renderOverview()},150)});
+$('prevW').onclick=()=>{weekStart=addDays(weekStart,-7);compute();refreshWeek()};
+$('nextW').onclick=()=>{weekStart=addDays(weekStart,7);compute();refreshWeek()};
+$('thisWeek').onclick=()=>{weekStart=mondayOf(todayISO());refreshWeek()};
+$('yearSel').onchange=e=>{viewYear=+e.target.value;compute();renderOverview()};
+$('monthTbl').onclick=e=>{const tr=e.target.closest('tr[data-m]');if(!tr)return;weekStart=mondayOf(isoOf(viewYear,+tr.dataset.m,1));compute();location.hash='uge';refreshWeek()};
+for(const f of SF)$('s-'+f).addEventListener('input',settingsChanged);
+$('normFields').addEventListener('input',settingsChanged);
+$('xlsxBtn').onclick=exportXlsx;
+$('jsonBtn').onclick=()=>offer(`Flexregnskab backup ${todayISO()}.json`,new Blob([JSON.stringify(Store.snapshot(),null,1)],{type:'application/json'}));
+$('restoreFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const d=JSON.parse(await f.text());if(d.app!=='flexregnskab'||!d.months)throw 0;
+    const n=Object.values(d.months).reduce((a,r)=>a+Object.keys(r).length,0);
+    $('restoreBox').innerHTML=`<div class="box"><span>Backuppen har ${n} dage. Dage med samme dato bliver overskrevet.</span><div class="row"><button class="primary" id="doRestore">Gendan</button></div></div>`;
+    $('doRestore').onclick=()=>{$('restoreBox').innerHTML='';S.settings=normSettings(d.settings);
+      for(const k of Object.keys(d.months))S.months[k]={...(S.months[k]||{}),...d.months[k]};
+      rebuildRows();Store.persist();renderAll();toast('Backup gendannet.')};
+  }catch(_){$('restoreBox').innerHTML='<p class="note neg">Filen er ikke en backup fra Flexregnskab.</p>'}};
+$('xlsFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)handleXls(f)};
+setInterval(()=>{if(CALC)renderToday()},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CALC)renderAll()});
+
+$('appVersion').textContent='Flexregnskab version '+APP_VERSION;
+Store.load();compute();buildWeek();refreshWeek();fillSettings();route();renderSync();FileSync.init();Cloud.init();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
