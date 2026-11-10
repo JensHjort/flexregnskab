@@ -3,6 +3,9 @@
 *.xlsx
 *.xls
 Flexregnskab backup*.json
+# Gemte sider fra tidssystemet (navn, personalenummer, fravær)
+Abs. Calendar*
+*_files/
 
 # Diverse
 .DS_Store

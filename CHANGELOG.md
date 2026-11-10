@@ -1,5 +1,13 @@
 # Ændringer
 
+## 1.1.0 (2026-11-10)
+
+- Import af fraværskalenderen fra tidssystemet: gem siden "Abs. Calendar" som HTML og vælg den under Indstillinger → Importer fil.
+  - Ferie, feriefridage, sygdom, flexfri og helligdage lægges ind på de rigtige dage. Helligdage får danske navne.
+  - Kan sætte startsaldo ud fra systemets "Pres."-tal og antal feriedage ud fra "Vac.".
+  - Dine egne mødt/gået-tider bliver bevaret.
+- `.gitignore` udelukker gemte sider fra tidssystemet.
+
 ## 1.0.0 (2026-11-10)
 
 Første selvstændige udgave af Flexregnskab (mappen `app`).

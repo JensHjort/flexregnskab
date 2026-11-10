@@ -216,8 +216,8 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
         <button id="jsonBtn">Hent backup</button>
         <label class="btn" for="restoreFile">Gendan backup</label>
         <input id="restoreFile" type="file" accept=".json,application/json" hidden>
-        <label class="btn" for="xlsFile">Importer fra Excel</label>
-        <input id="xlsFile" type="file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+        <label class="btn" for="xlsFile">Importer fil</label>
+        <input id="xlsFile" type="file" accept=".xlsx,.xlsm,.xls,.csv,.html,.htm" hidden>
       </div>
       <div id="restoreBox"></div>
       <div id="xlsBox"></div>
@@ -240,7 +240,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.1.0';
 const CFG=Object.assign({msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -708,9 +708,90 @@ function readSheet(wb){
   }
   return{sheet:best.name,cols:c,entries:[...seen.values()].sort((a,b)=>a.iso<b.iso?-1:1)};
 }
+/* ---------- import from the time system's "Abs. Calendar" page (saved as HTML) ---------- */
+const ABS_CODES={FE:['Ferie',''],FF:['Ferie','Feriefridag'],VL:['Ferie',''],SY:['Syg',''],SL:['Syg',''],FL:['Flexfri',''],
+  BS:['Fri','Barn syg'],AF:['Fri','Afspadsering'],AN:['Fri','Anciennitetsfri'],FU:['Fri','Fravær uden løn'],FM:['Fri','Fri med løn'],
+  MD:['Fri','Mærkedag'],KU:['Fri','Kursus'],FO:['Fri','Fædreorlov'],BO:['Fri','Barselsorlov'],FK:['Fri','Fri iht. kontrakt'],
+  'LÆ':['','Lægebesøg'],TL:['','Tandlæge'],WH:['','Hjemmearbejde']};
+const EN_MONTHS=['january','february','march','april','may','june','july','august','september','october','november','december'];
+function parseAbsCalendar(html){
+  if(!/iflxAbsenceCalendar/.test(html))return null;
+  const info={};
+  const h=/Pers\.No\.[\s\S]*?<\/tr>\s*<tr>\s*<td>\s*(\d{4})\s*<\/td>\s*<td>\s*<\/td>\s*<td>\s*([^<]*?)\s*<\/td>\s*<td>\s*([^<]*?)\s*<\/td>\s*<td>\s*([^<]*?)\s*<\/td>/.exec(html);
+  if(h){info.year=+h[1];info.name=h[2];info.persNo=h[3];info.dept=h[4];}
+  const days=[];
+  const re=/ausText\w+\s*=\s*new Array\(\);([\s\S]*?)<\/script>\s*<td[^>]*clickDay\(\s*'(\d\d)\.(\d\d)\.(\d{4})'\s*\)[\s\S]*?<font[^>]*>\s*([^<]*?)\s*<\/font>/g;
+  for(const m of html.matchAll(re)){
+    const texts=[...m[1].matchAll(/ausText\w+\[\d+\]\s*=\s*'([^']*)'/g)].map(x=>x[1].trim());
+    const parts=[...m[1].matchAll(/tagesArtArrName\w+\[\d+\]\s*=\s*'([^']*)'/g)].map(x=>x[1].trim());
+    const code=m[5].trim().toUpperCase(),desc=(texts[0]||code).replace(/^\S+\s*-\s*/,'').replace(/\s*\([A-ZÆØÅ]{1,3}\)\s*$/,'').trim();
+    const full=!parts.length||parts.every(p=>!p||/full/i.test(p));
+    days.push({iso:`${m[4]}-${m[3]}-${m[2]}`,code,desc,full,part:parts.filter(Boolean).join(', ')});
+  }
+  const months=[];
+  const heads=[...html.matchAll(/<th class="iflxAbsenceCalendar"[^>]*>\s*([A-Za-z]+)\s*<\/th>/g)].filter(m=>EN_MONTHS.includes(m[1].toLowerCase()));
+  heads.forEach((m,i)=>{
+    const seg=html.slice(m.index,i+1<heads.length?heads[i+1].index:undefined);
+    const acc=[...seg.matchAll(/iflxAbsenceCalendarAcc[^>]*>(?:&nbsp;|\s)*(-?[\d.,]+)/g)].map(x=>pnum(x[1]));
+    months[EN_MONTHS.indexOf(m[1].toLowerCase())]={pres:acc[0]??null,vac:acc[1]??null};
+  });
+  return{info,days,months};
+}
+const HOLIDAYS_DA={'new year':'Nytårsdag','maundy thursday':'Skærtorsdag','good friday':'Langfredag','easter sunday':'Påskedag','easter monday':'2. påskedag',
+  'labor day':'1. maj','ascension day':'Kristi himmelfartsdag','whit sunday':'Pinsedag','whit monday':'2. pinsedag','constitution da':'Grundlovsdag',
+  'constitution day':'Grundlovsdag','christmas eve':'Juleaftensdag','christmas':'Juledag','boxing day':'2. juledag','new year\'s eve':'Nytårsaftensdag'};
+function absToRow(d){
+  if(d.code==='HO'||d.code==='SH'){const en=d.desc.replace(/^(Special )?Holiday\s*\(?/i,'').replace(/\)$/,'').trim();
+    return{absence:'Fri',comment:HOLIDAYS_DA[en.toLowerCase()]||en||'Helligdag'};}
+  const [abs,label]=ABS_CODES[d.code]||['Fri',''];
+  const comment=label||d.desc;
+  if(!d.full)return{absence:'',comment:`${comment} (${d.part||'del af dagen'})`};
+  return abs?{absence:abs,comment:abs==='Fri'||label?comment:''}:{absence:'',comment};
+}
+let absPending=null;
+function handleAbs(res,box,fname){
+  const {info,days,months}=res;
+  if(!days.length){box.innerHTML='<p class="note neg">Fandt ingen fraværsdage på siden.</p>';return}
+  const y=info.year||+days[0].iso.slice(0,4),today=todayISO(),curM=+today.slice(0,4)===y?+today.slice(5,7)-1:11;
+  let ref=null;for(let m=Math.min(curM,11);m>=0;m--)if(months[m]&&months[m].pres!=null){ref={m,...months[m]};break}
+  const ferieUsed=days.filter(d=>d.full&&['FE','FF','VL'].includes(d.code)&&wdOf(d.iso)<5).length;
+  const cnt={};for(const d of days){const k=absToRow(d).absence||'Note';cnt[k]=(cnt[k]||0)+1}
+  absPending={days,info,ref,ferieTotal:ref&&ref.vac!=null?ferieUsed+ref.vac:null};
+  const ex=days.filter(d=>S.rows[d.iso]).length;
+  box.innerHTML=`<div class="box">
+    <div><b>${days.length} fraværsdage i ${y}</b>${info.name?` for ${esc(info.name)}${info.persNo?' ('+esc(info.persNo)+')':''}`:''}.
+      <div class="note">${Object.entries(cnt).map(([k,v])=>`${v} ${k==='Note'?'noter':k.toLowerCase()}`).join(' · ')}${ex?` · ${ex} dage har allerede registreringer, og dine tider bliver bevaret`:''}</div></div>
+    ${ref?`<label class="row" style="gap:8px;font-size:15px;align-items:flex-start"><input type="checkbox" id="absSaldo" checked style="width:auto;margin-top:4px">
+      <span>Brug tidssystemets saldo <b class="n">${fs(ref.pres)}</b> t (Pres. for ${MONTHS[ref.m]}) som startsaldo fra
+      <input type="date" id="absDate" value="${today.startsWith(y+'-')?today:isoOf(y,ref.m,1)}" style="width:auto;padding:4px 8px;margin-left:4px"></span></label>`:''}
+    ${absPending.ferieTotal!=null?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absFerie" checked style="width:auto"> Sæt feriedage i året til ${absPending.ferieTotal} (${ferieUsed} brugt + ${ref.vac} tilbage)</label>`:''}
+    ${info.name&&!S.settings.name?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absName" checked style="width:auto"> Brug navnet ${esc(info.name)}</label>`:''}
+    <div class="row"><button class="primary" id="absGo">Importer</button><button class="ghost" id="absCancel">Annuller</button></div></div>`;
+  $('absCancel').onclick=()=>{absPending=null;box.innerHTML=''};
+  $('absGo').onclick=()=>{
+    const p=absPending;if(!p)return;
+    for(const d of p.days){const k=monthKey(d.iso),old=(S.months[k]||{})[d.iso]||{},n=absToRow(d);
+      const row={...old};if(n.absence)row.absence=n.absence;if(n.comment&&!old.comment)row.comment=n.comment;
+      (S.months[k]=S.months[k]||{})[d.iso]=row;}
+    rebuildRows();
+    const st={...S.settings};
+    if($('absSaldo')&&$('absSaldo').checked&&/^\d{4}-\d{2}-\d{2}$/.test($('absDate').value)){st.startDate=$('absDate').value;st.startFlex=p.ref.pres;}
+    if($('absFerie')&&$('absFerie').checked)st.ferieDays=p.ferieTotal;
+    if($('absName')&&$('absName').checked)st.name=p.info.name;
+    S.settings=st;Store.persist();absPending=null;
+    box.innerHTML=`<p class="note pos">${p.days.length} fraværsdage importeret.</p>`;viewYear=+p.days[0].iso.slice(0,4);renderAll();
+    toast('Fravær importeret fra tidssystemet.');
+  };
+}
+
 let xlsPending=null;
 async function handleXls(f){
   const box=$('xlsBox');box.innerHTML='<p class="note">Læser '+esc(f.name)+'…</p>';
+  if(/\.html?$/i.test(f.name)){
+    const res=parseAbsCalendar(decodeText(await f.arrayBuffer()));
+    if(!res){box.innerHTML='<p class="note neg">Siden ligner ikke "Abs. Calendar" fra tidssystemet. Gem kalendersiden (Ctrl+S, "Kun HTML" eller "Hele siden") og vælg den her.</p>';return}
+    handleAbs(res,box,f.name);return;
+  }
   try{
     if(!window.XLSX)await loadScript(XLSX_URL);
     const wb=/\.csv$/i.test(f.name)?XLSX.read(await f.text(),{type:'string'}):XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array'});
