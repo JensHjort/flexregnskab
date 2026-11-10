@@ -1,5 +1,5 @@
 ﻿// Offline-cache for Flexregnskab. Hæv versionen, når appen opdateres.
-const CACHE = 'flexregnskab-v3';
+const CACHE = 'flexregnskab-v4';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './icon-180.png'];
 const STATIC_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com', 'cdn.jsdelivr.net'];
 

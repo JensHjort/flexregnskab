@@ -26,6 +26,16 @@ Derefter gemmes hver ændring i `flexregnskab.csv`, og OneDrive synkroniserer fi
 - `flexregnskab.csv` kan åbnes i Excel. Gem den som CSV (semikolon-separeret) igen, hvis du retter i den.
 - Virker ikke på telefon. Telefonens browser kan ikke skrive til en fil i OneDrive. Til telefon skal appen på en webadresse med Microsoft-login (se nedenfor).
 
+## Hent data fra tidssystemet
+
+Appen kan læse to sider fra tidssystemet:
+- **Month Journal:** tider og saldo pr. dag. Systemets saldo bruges direkte.
+- **Abs. Calendar:** ferie, sygdom, flexfri og helligdage for hele året.
+
+Hurtigst er bogmærket: gå til Indstillinger → Hent fra tidssystemet, og træk knappen **Til Flexregnskab** op i favoritlinjen. Åbn siden i tidssystemet, klik på bogmærket, gå tilbage til appen og tryk Ctrl+V.
+
+Appen kan ikke selv læse andre faner, for browseren tillader det ikke af sikkerhedshensyn. Bogmærket kører inde i tidssystemets fane og kopierer siden. Virker bogmærket ikke, fordi IT har blokeret det, så gem siden med Ctrl+S og brug **Importer fil**.
+
 ## Hvor gemmes data?
 
 - **Datafil i OneDrive (se ovenfor):** i `flexregnskab.csv` i din OneDrive-mappe.

@@ -204,10 +204,21 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       <h2>Arbejdstid</h2>
       <div class="fields" id="normFields" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,110px),1fr))"></div>
       <div class="fields">
-        <label class="f">Pause ved over 6 timer (min)<input id="s-p6" inputmode="numeric" class="n"></label>
-        <label class="f">Pause ved over 9 timer (min)<input id="s-p9" inputmode="numeric" class="n"></label>
+        <label class="f">Frokostpause (min)<input id="s-p6" inputmode="numeric" class="n"></label>
+        <label class="f">Trækkes ved over (timer)<input id="s-pauseFrom" inputmode="decimal" class="n"></label>
+        <label class="f">Pause i alt over 9 timer (min)<input id="s-p9" inputmode="numeric" class="n"></label>
       </div>
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
+    </div>
+    <div class="card pad" style="display:flex;flex-direction:column;gap:14px">
+      <h2>Hent fra tidssystemet</h2>
+      <ol class="note" style="padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px">
+        <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang.
+          <div class="row" style="margin-top:8px"><a class="btn primary" id="bmLink" href="#" title="Træk mig op i favoritlinjen">⤓ Til Flexregnskab</a><button class="ghost" id="bmCopy">Kopiér koden i stedet</button></div></li>
+        <li>Åbn <b>Month Journal</b> eller <b>Abs. Calendar</b> i tidssystemet, og klik på bogmærket. Siden bliver kopieret.</li>
+        <li>Kom tilbage hertil og tryk <b>Ctrl+V</b>. Du ser, hvad der importeres, før det gemmes.</li>
+      </ol>
+      <p class="note">Du kan også gemme siden med Ctrl+S og vælge den med <b>Importer fil</b> herunder.</p>
     </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:16px">
       <h2>Data</h2>
@@ -225,7 +236,8 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
         <summary>Sådan regnes der</summary>
         <ul class="note" style="padding-left:18px;margin-top:10px;display:flex;flex-direction:column;gap:4px">
           <li>Netto = gået − mødt − pause. Skriver du ingen pause, bruges den automatiske ud fra arbejdstiden.</li>
-          <li>Arbejder du 6 timer eller mindre (fx en kort fredag), trækkes der ingen frokostpause. Skriv 0 i pausefeltet, hvis du har sprunget frokosten over på en længere dag.</li>
+          <li>Frokostpausen trækkes, når du har været på arbejde i mere end det antal timer, der står under Arbejdstid. Skriv 0 i pausefeltet, hvis du har sprunget frokosten over.</li>
+          <li>Har du importeret en månedsjournal fra tidssystemet, bruges systemets saldo direkte på de dage. Appen regner videre derfra.</li>
           <li>Flex = netto − normtid. Weekender har normtid 0.</li>
           <li>Ferie, Syg og Fri giver normtid 0, så saldoen står stille. Flexfri trækker hele dagens normtid.</li>
           <li>En hverdag uden registrering tæller som minus hele normtiden og markeres med "mangler". Fremtidige dage og i dag tæller først, når du har skrevet hvornår du gik.</li>
@@ -240,7 +252,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.2.0';
 const CFG=Object.assign({msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -256,6 +268,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
 const isoOf=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
+const daysIn=(y,m)=>new Date(Date.UTC(y,m+1,0)).getUTCDate();
 const parseIso=iso=>{const [y,m,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};
 const isoD=dt=>dt.toISOString().slice(0,10);
 const addDays=(iso,n)=>{const d=parseIso(iso);d.setUTCDate(d.getUTCDate()+n);return isoD(d)};
@@ -273,7 +286,7 @@ const hm=h=>{const m=Math.round(Math.abs(h)*60);return `${h<0?'−':''}${Math.fl
 const clock=t=>{const d=new Date(t);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Kunne ikke hente '+src.split('/').pop()+'. Er du online?'));document.head.appendChild(s)})}
-const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],p6:30,p9:45};
+const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45};
 
 /* ---------- state + local storage ---------- */
 const S={settings:{...DEF},months:{},rows:{},updatedAt:0};
@@ -392,8 +405,8 @@ function splitCsv(line,d){const out=[];let cur='',q=false;
 function toCsv(){
   const st=S.settings,n=v=>String(v??'').replace('.',','),q=v=>{v=String(v??'');return /[;"\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   const L=['#Flexregnskab;1','#navn;'+q(st.name),'#startdato;'+st.startDate,'#startsaldo;'+n(st.startFlex),'#feriedage;'+n(st.ferieDays),
-    '#normtid;'+(st.norm||[]).map(n).join(';'),'#pause6;'+n(st.p6),'#pause9;'+n(st.p9),'Dato;Ugedag;Mødt;Gået;Pause (min);Fravær;Kommentar'];
-  for(const iso of Object.keys(S.rows).sort()){const r=S.rows[iso];L.push([iso,WD[wdOf(iso)],r.start||'',r.end||'',r.pause??'',q(r.absence||''),q(r.comment||'')].join(';'))}
+    '#normtid;'+(st.norm||[]).map(n).join(';'),'#pause6;'+n(st.p6),'#pausefra;'+n(st.pauseFrom??6),'#pause9;'+n(st.p9),'Dato;Ugedag;Mødt;Gået;Pause (min);Fravær;Kommentar;Systemsaldo;System faktisk'];
+  for(const iso of Object.keys(S.rows).sort()){const r=S.rows[iso];L.push([iso,WD[wdOf(iso)],r.start||'',r.end||'',r.pause??'',q(r.absence||''),q(r.comment||''),n(r.saldo),n(r.sysActual)].join(';'))}
   return '﻿'+L.join('\r\n')+'\r\n';
 }
 function parseCsv(text){
@@ -408,8 +421,9 @@ function parseCsv(text){
     else if(k==='feriedage')st.ferieDays=pnum(v[0])??DEF.ferieDays;
     else if(k==='normtid'){const a=v.slice(0,5).map(pnum);if(a.length===5&&a.every(x=>x!=null))st.norm=a}
     else if(k==='pause6')st.p6=pnum(v[0])??DEF.p6;
+    else if(k==='pausefra')st.pauseFrom=pnum(v[0])??DEF.pauseFrom;
     else if(k==='pause9')st.p9=pnum(v[0])??DEF.p9;}
-  const c=findCols(splitCsv(lines[hi],d)),months={};
+  const hdr=splitCsv(lines[hi],d),c=findCols(hdr),months={},ca=hdr.findIndex(h=>/system faktisk/i.test(h));
   if(c.date==null)return null;
   for(const l of lines.slice(hi+1)){if(!l.trim())continue;
     const p=splitCsv(l,d),iso=xDate(p[c.date]);if(!iso)continue;
@@ -418,6 +432,8 @@ function parseCsv(text){
     if(c.pause!=null&&(p[c.pause]||'')!==''){const v=p[c.pause],m=toMin(v)??pnum(v);if(m!=null)row.pause=Math.max(0,Math.round(m))}
     if(c.absence!=null&&p[c.absence])row.absence=p[c.absence];
     if(c.comment!=null&&p[c.comment])row.comment=p[c.comment];
+    if(c.saldo!=null&&pnum(p[c.saldo])!=null)row.saldo=pnum(p[c.saldo]);
+    if(ca>=0&&pnum(p[ca])!=null)row.sysActual=pnum(p[ca]);
     if(Object.keys(row).length)(months[monthKey(iso)]=months[monthKey(iso)]||{})[iso]=row;}
   return{settings:normSettings(st),months};
 }
@@ -482,13 +498,12 @@ function compute(){
   const st=S.settings,today=todayISO(),start=st.startDate||DEF.startDate;
   const ys=[NOW_Y,+start.slice(0,4),...Object.keys(S.rows).map(i=>+i.slice(0,4)),viewYear,+weekStart.slice(0,4)];
   const from=`${Math.min(...ys)}-01-01`,to=`${Math.max(...ys)}-12-31`;
-  const p6=pnum(st.p6)||0,p9=pnum(st.p9)||0;
-  const map={};let saldo=null;
+  const map={};let saldo=null,started=false;
   for(let iso=from;iso<=to;iso=addDays(iso,1)){
     const wd=wdOf(iso),we=wd>=5,r=S.rows[iso]||null,fut=iso>today,isToday=iso===today;
     const s=toMin(r&&r.start),e=toMin(r&&r.end);
     const brutto=s!=null&&e!=null&&e>s?(e-s)/60:null;
-    const autoP=brutto==null?0:brutto>9?p9:brutto>6?p6:0;
+    const autoP=autoPause(brutto,st);
     const manual=r&&r.pause!=null&&r.pause!==''?+r.pause:null;
     const pause=brutto==null?null:(manual!=null?manual:autoP);
     const netto=brutto==null?0:Math.max(0,brutto-pause/60);
@@ -496,15 +511,20 @@ function compute(){
     const normDay=we?0:(pnum(st.norm&&st.norm[wd])??7.4);
     const norm=(c==='ferie'||c==='syg'||c==='fri')?0:normDay;
     const open=(fut||isToday)&&brutto==null&&c!=='flexfri';
-    const flex=open?0:netto-norm;
-    const counts=iso>=start;
-    if(iso===start)saldo=pnum(st.startFlex)||0;
-    if(counts)saldo+=flex;
-    const missing=counts&&!fut&&!isToday&&!we&&!c&&brutto==null;
-    map[iso]={iso,wd,we,fut,isToday,r,s,e,brutto,autoP,manual,pause,netto,norm,flex,c,open,missing,saldo:counts?saldo:null};
+    let flex=open?0:netto-norm;
+    // The time system's own balance wins where it exists (past days only).
+    const sys=r&&r.saldo!=null&&r.saldo!==''&&!fut&&!isToday?+r.saldo:null;
+    if(!started&&iso===start){saldo=pnum(st.startFlex)||0;started=true;saldo+=flex;}
+    else if(sys!=null){if(started)flex=sys-saldo;saldo=sys;started=true;}
+    else if(started)saldo+=flex;
+    if(sys!=null&&iso===start&&started)saldo=sys;
+    const missing=started&&!fut&&!isToday&&!we&&!c&&brutto==null&&sys==null;
+    map[iso]={iso,wd,we,fut,isToday,r,s,e,brutto,autoP,manual,pause,netto,norm,flex,c,open,missing,sys,saldo:started?saldo:null};
   }
   CALC=map;return map;
 }
+// Automatic lunch: p6 minutes when working more than pauseFrom hours; p9 minutes in total above 9 hours.
+function autoPause(h,st){if(h==null)return 0;const from=pnum(st.pauseFrom)??6;return h>9?(pnum(st.p9)||0):h>from?(pnum(st.p6)||0):0}
 const saldoNow=()=>{const t=todayISO();return CALC[t]?CALC[t].saldo:null};
 
 /* ---------- Uge ---------- */
@@ -551,8 +571,8 @@ function renderToday(){
   let live='',btn='';
   if(x&&x.c&&x.c!=='flexfri')live=`Registreret som ${String(r.absence).toLowerCase()}.`;
   else if(!r.start){live=x&&x.we?'Weekend.':'Ikke mødt ind endnu.';btn=`<button class="primary" id="stampIn">Mød ind ${nowT}</button>`;}
-  else if(!r.end){const st=S.settings,h=Math.max(0,(toMin(nowT)-toMin(r.start))/60),p=h>9?+st.p9:h>6?+st.p6:0,net=Math.max(0,h-(r.pause!=null&&r.pause!==''?+r.pause:p)/60),norm=x.we?0:(pnum(st.norm[wd])??7.4);
-    live=`Mødt ${r.start} · <span class="n">${f2(net)}</span> t netto indtil nu`+(norm?` · normtid nået kl. ${minToT(toMin(r.start)+Math.round(norm*60)+(norm>6?+st.p6:0))}`:'');
+  else if(!r.end){const st=S.settings,h=Math.max(0,(toMin(nowT)-toMin(r.start))/60),p=autoPause(h,st),net=Math.max(0,h-(r.pause!=null&&r.pause!==''?+r.pause:p)/60),norm=x.we?0:(pnum(st.norm[wd])??7.4);
+    live=`Mødt ${r.start} · <span class="n">${f2(net)}</span> t netto indtil nu`+(norm?` · normtid nået kl. ${minToT(toMin(r.start)+Math.round(norm*60)+autoPause(norm+0.5,st))}`:'');
     btn=`<button class="dark" id="stampOut">Gå hjem ${nowT}</button>`;}
   else live=`Mødt ${r.start} · gået ${r.end} · <span class="n">${f2(x.netto)}</span> t netto`;
   $('todaybar').innerHTML=`<span class="t">I dag, ${WDL[wd]} ${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]}</span><span class="live">${live}</span>${btn}`;
@@ -561,7 +581,7 @@ function renderToday(){
 async function stamp(k){const t=todayISO(),n=new Date(),v=`${pad(n.getHours())}:${pad(n.getMinutes())}`;
   await saveDay(t,{...(S.rows[t]||{}),[k]:v});toast(k==='start'?`Mødt ind ${v}`:`Gået hjem ${v}`);}
 async function saveDay(iso,row){
-  const clean={};for(const k of['start','end','pause','absence','comment'])if(row[k]!=null&&row[k]!=='')clean[k]=row[k];
+  const clean={};for(const k of['start','end','pause','absence','comment','saldo','sysActual','sysNorm'])if(row[k]!=null&&row[k]!=='')clean[k]=row[k];
   const key=monthKey(iso),rows={...(S.months[key]||{})};
   if(Object.keys(clean).length)rows[iso]=clean;else delete rows[iso];
   await Store.saveMonth(key,rows);
@@ -624,17 +644,17 @@ function drawChart(pts){
 }
 
 /* ---------- Indstillinger ---------- */
-const SF=['name','startDate','startFlex','ferieDays','p6','p9'];
+const SF=['name','startDate','startFlex','ferieDays','p6','pauseFrom','p9'];
 function fillSettings(){
   const st=S.settings,act=document.activeElement;
   if(!$('normFields').children.length)$('normFields').innerHTML=WD.slice(0,5).map((n,i)=>`<label class="f">${n}<input id="s-norm${i}" inputmode="decimal" class="n"></label>`).join('');
-  for(const f of SF){const el=$('s-'+f);if(el===act)continue;const v=st[f];el.value=['startFlex','ferieDays'].includes(f)?String(v??'').replace('.',','):(v??'');}
+  for(const f of SF){const el=$('s-'+f);if(el===act)continue;const v=st[f];el.value=['startFlex','ferieDays','pauseFrom'].includes(f)?String(v??'').replace('.',','):(v??'');}
   for(let i=0;i<5;i++){const el=$('s-norm'+i);if(el!==act)el.value=f2(pnum(st.norm&&st.norm[i])??7.4);}
 }
 let sT=null;
 function settingsChanged(){clearTimeout(sT);$('saveState').textContent='Gemmer…';
   sT=setTimeout(async()=>{const st={...S.settings};
-    for(const f of SF){const v=$('s-'+f).value;st[f]=['startFlex','ferieDays','p6','p9'].includes(f)?(pnum(v)??0):v.trim();}
+    for(const f of SF){const v=$('s-'+f).value;st[f]=['startFlex','ferieDays','p6','p9','pauseFrom'].includes(f)?(pnum(v)??0):v.trim();}
     if(!/^\d{4}-\d{2}-\d{2}$/.test(st.startDate))st.startDate=DEF.startDate;
     st.norm=[0,1,2,3,4].map(i=>pnum($('s-norm'+i).value)??7.4);
     await Store.saveSettings(st);$('saveState').textContent='Gemt.';},600);}
@@ -761,9 +781,6 @@ function handleAbs(res,box,fname){
   box.innerHTML=`<div class="box">
     <div><b>${days.length} fraværsdage i ${y}</b>${info.name?` for ${esc(info.name)}${info.persNo?' ('+esc(info.persNo)+')':''}`:''}.
       <div class="note">${Object.entries(cnt).map(([k,v])=>`${v} ${k==='Note'?'noter':k.toLowerCase()}`).join(' · ')}${ex?` · ${ex} dage har allerede registreringer, og dine tider bliver bevaret`:''}</div></div>
-    ${ref?`<label class="row" style="gap:8px;font-size:15px;align-items:flex-start"><input type="checkbox" id="absSaldo" checked style="width:auto;margin-top:4px">
-      <span>Brug tidssystemets saldo <b class="n">${fs(ref.pres)}</b> t (Pres. for ${MONTHS[ref.m]}) som startsaldo fra
-      <input type="date" id="absDate" value="${today.startsWith(y+'-')?today:isoOf(y,ref.m,1)}" style="width:auto;padding:4px 8px;margin-left:4px"></span></label>`:''}
     ${absPending.ferieTotal!=null?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absFerie" checked style="width:auto"> Sæt feriedage i året til ${absPending.ferieTotal} (${ferieUsed} brugt + ${ref.vac} tilbage)</label>`:''}
     ${info.name&&!S.settings.name?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absName" checked style="width:auto"> Brug navnet ${esc(info.name)}</label>`:''}
     <div class="row"><button class="primary" id="absGo">Importer</button><button class="ghost" id="absCancel">Annuller</button></div></div>`;
@@ -775,7 +792,6 @@ function handleAbs(res,box,fname){
       (S.months[k]=S.months[k]||{})[d.iso]=row;}
     rebuildRows();
     const st={...S.settings};
-    if($('absSaldo')&&$('absSaldo').checked&&/^\d{4}-\d{2}-\d{2}$/.test($('absDate').value)){st.startDate=$('absDate').value;st.startFlex=p.ref.pres;}
     if($('absFerie')&&$('absFerie').checked)st.ferieDays=p.ferieTotal;
     if($('absName')&&$('absName').checked)st.name=p.info.name;
     S.settings=st;Store.persist();absPending=null;
@@ -784,14 +800,114 @@ function handleAbs(res,box,fname){
   };
 }
 
+/* ---------- import from the time system's "Month Journal" page ---------- */
+function htmlText(s){const d=document.createElement('div');d.innerHTML=s.replace(/<(script|style)[\s\S]*?<\/\1>/gi,'');return d.textContent.replace(/ /g,' ').replace(/\s+/g,' ').trim()}
+function parseMonthJournal(html){
+  const mm=/Journal for\s*(\d{1,2})\s*\/\s*(\d{4})/.exec(html);
+  if(!mm||!/iflxMojouPrt/.test(html))return null;
+  const y=+mm[2],m=+mm[1]-1,days=[];let cur=null;
+  for(const row of html.matchAll(/<tr[^>]*>\s*((?:<td[^>]*class="iflxMojouPrt[\s\S]*?<\/td>\s*){9})<\/tr>/g)){
+    const c=[...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>htmlText(x[1]));
+    const dm=/^[A-Za-zæøåÆØÅ]+\s*,\s*(\d{1,2})$/.exec(c[0]);
+    if(dm){const d=+dm[1];if(d<1||d>daysIn(y,m)){cur=null;continue}
+      cur={iso:isoOf(y,m,d),work:[],abs:[],remarks:[],norm:pnum(c[6]),actual:pnum(c[7]),saldo:pnum(c[8])};days.push(cur);}
+    if(!cur)continue;
+    const st=xTime(c[2]),en=xTime(c[3]),reason=c[5];
+    if(reason)cur.abs.push({st,en,reason});else if(st||en)cur.work.push([st,en]);
+    for(const r of[c[1],c[4]])if(r)cur.remarks.push(r);
+  }
+  return days.length?{y,m,days}:null;
+}
+function journalToRow(d,old,st){
+  const row={...(old||{})};
+  delete row.start;delete row.end;delete row.pause;
+  const work=d.work.filter(w=>w[0]).sort((a,b)=>toMin(a[0])-toMin(b[0]));
+  if(work.length){row.start=work[0][0];const last=work[work.length-1];if(last[1])row.end=last[1];}
+  const notes=[];
+  for(const a of d.abs){
+    const cl=absClass(a.reason);
+    if(!a.st&&!a.en&&!work.length){row.absence={ferie:'Ferie',syg:'Syg',flexfri:'Flexfri'}[cl]||'Fri';if(row.absence==='Fri'||/feriefri/i.test(a.reason))notes.push(a.reason);}
+    else notes.push(a.reason+(a.st?` ${a.st}–${a.en||''}`:''));
+  }
+  notes.push(...d.remarks);
+  if(notes.length&&!(old&&old.comment))row.comment=notes.join(' · ');
+  // Keep the app's netto equal to the system's "Actual" by storing the pause the system used when it differs from the automatic rule.
+  if(row.start&&row.end&&d.actual!=null){
+    const b=(toMin(row.end)-toMin(row.start))/60,p=Math.round((b-d.actual)*60);
+    if(p>=0&&p!==autoPause(b,st))row.pause=p;
+  }
+  if(d.saldo!=null)row.saldo=d.saldo;
+  if(d.actual!=null)row.sysActual=d.actual;
+  return row;
+}
+let jrnPending=null;
+function handleJournal(res,box){
+  const today=todayISO(),days=res.days.filter(d=>d.iso<today);
+  if(!days.length){box.innerHTML='<p class="note neg">Journalen har ingen afsluttede dage endnu.</p>';return}
+  // Detect the system's lunch rule from simple days (one work period, no partial absence).
+  const simple=days.filter(d=>d.work.length===1&&!d.abs.length&&d.work[0][0]&&d.work[0][1]&&d.actual!=null)
+    .map(d=>{const b=(toMin(d.work[0][1])-toMin(d.work[0][0]))/60;return{b,p:Math.round((b-d.actual)*60)}});
+  let rule=null;
+  if(simple.length>=3){const ps=[...new Set(simple.map(x=>x.p))];
+    if(ps.length===1&&ps[0]>0){const minB=Math.min(...simple.map(x=>x.b));rule={p:ps[0],from:Math.min(6,Math.floor(minB)),over9:simple.some(x=>x.b>9)}}}
+  const st=S.settings,ruleDiffers=rule&&(+st.p6!==rule.p||(pnum(st.pauseFrom)??6)>rule.from||(rule.over9&&+st.p9!==rule.p));
+  const last=[...days].reverse().find(d=>d.saldo!=null),withTimes=days.filter(d=>d.work.length).length,partial=days.filter(d=>d.abs.some(a=>a.st)).length;
+  const ex=days.filter(d=>S.rows[d.iso]&&(S.rows[d.iso].start||S.rows[d.iso].end)).length;
+  jrnPending={res,days,rule};
+  box.innerHTML=`<div class="box">
+    <div><b>Månedsjournal for ${MONTHS[res.m]} ${res.y}</b>: ${days.length} dage, ${withTimes} med tider${partial?`, ${partial} med fravær en del af dagen`:''}.
+      ${last?`<div>Saldo i tidssystemet ${+last.iso.slice(8)}. ${MONTHS[res.m]}: <b class="n">${fs(last.saldo)}</b> t. Den bruges direkte i appen.</div>`:''}
+      ${ex?`<div class="note">${ex} dage har allerede tider i appen. De bliver erstattet af tidssystemets tider.</div>`:''}</div>
+    ${ruleDiffers?`<label class="row" style="gap:8px;font-size:15px;align-items:flex-start"><input type="checkbox" id="jrnRule" checked style="width:auto;margin-top:4px">
+      <span>Brug tidssystemets pauseregel: ${rule.p} min ved over ${dnum(rule.from)} timer${rule.over9?`, også over 9 timer`:''}. Appen trækker i dag ${st.p6} min ved over ${dnum(pnum(st.pauseFrom)??6)} timer og ${st.p9} min over 9 timer.</span></label>`:''}
+    <div class="row"><button class="primary" id="jrnGo">Importer ${days.length} dage</button><button class="ghost" id="jrnCancel">Annuller</button></div></div>`;
+  $('jrnCancel').onclick=()=>{jrnPending=null;box.innerHTML=''};
+  $('jrnGo').onclick=()=>{
+    const p=jrnPending;if(!p)return;const st2={...S.settings};
+    if($('jrnRule')&&$('jrnRule').checked){st2.p6=p.rule.p;st2.pauseFrom=p.rule.from;if(p.rule.over9)st2.p9=p.rule.p;}
+    S.settings=st2;
+    for(const d of p.days){const k=monthKey(d.iso);S.months[k]=S.months[k]||{};
+      const row=journalToRow(d,S.months[k][d.iso],st2);const clean={};for(const f in row)if(row[f]!=null&&row[f]!=='')clean[f]=row[f];
+      if(Object.keys(clean).length)S.months[k][d.iso]=clean;else delete S.months[k][d.iso];}
+    rebuildRows();Store.persist();jrnPending=null;
+    box.innerHTML=`<p class="note pos">${p.days.length} dage importeret fra månedsjournalen.</p>`;
+    viewYear=p.res.y;weekStart=mondayOf(p.days[p.days.length-1].iso);renderAll();toast('Månedsjournal importeret.');
+  };
+}
+const dnum=n=>String(n).replace('.',',');
+// Recognise any page from the time system and show the right import.
+function importHtml(text){
+  const box=$('xlsBox');
+  const j=parseMonthJournal(text);if(j){handleJournal(j,box);return true}
+  const a=parseAbsCalendar(text);if(a){handleAbs(a,box);return true}
+  box.innerHTML='<p class="note neg">Siden ligner hverken "Month Journal" eller "Abs. Calendar" fra tidssystemet.</p>';return false;
+}
+const BM_MARK='FLEXREGNSKAB-IMPORT';
+document.addEventListener('paste',e=>{
+  const t=e.clipboardData&&e.clipboardData.getData('text');if(!t)return;
+  const tag=t.startsWith(BM_MARK);
+  if(!tag&&!/iflxMojouPrt|iflxAbsenceCalendar/.test(t))return;
+  e.preventDefault();location.hash='indstillinger';
+  importHtml(tag?t.slice(BM_MARK.length):t);
+  setTimeout(()=>$('xlsBox').scrollIntoView({behavior:'smooth',block:'center'}),50);
+});
+
+// Bookmarklet: runs inside the time system's tab (the only place allowed to read it) and copies the page to the clipboard.
+const BOOKMARKLET="(function(){var M='"+BM_MARK+"';function g(w){try{var h=w.document.documentElement.outerHTML;if(/iflxMojouPrt|iflxAbsenceCalendar/.test(h))return h;for(var i=0;i<w.frames.length;i++){var r=g(w.frames[i]);if(r)return r}}catch(e){}return null}"+
+  "var h=g(window.top)||g(window);if(!h){alert('Flexregnskab: Åbn Month Journal eller Abs. Calendar i tidssystemet, og klik så på bogmærket.');return}"+
+  "var t=M+h;function ok(){alert('Kopieret til Flexregnskab. Gå til appen og tryk Ctrl+V.')}"+
+  "function fb(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.focus();a.select();var s=false;try{s=document.execCommand('copy')}catch(e){}a.remove();s?ok():alert('Flexregnskab: Kunne ikke kopiere. Gem siden med Ctrl+S og importer filen i stedet.')}"+
+  "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(ok,fb)}else fb()})();";
+$('bmLink').href='javascript:'+encodeURIComponent(BOOKMARKLET);
+$('bmLink').onclick=e=>{e.preventDefault();toast('Træk knappen op i favoritlinjen i stedet for at klikke.')};
+$('bmCopy').onclick=async()=>{const code='javascript:'+encodeURIComponent(BOOKMARKLET);
+  try{await navigator.clipboard.writeText(code);toast('Koden er kopieret. Opret et nyt bogmærke, og indsæt koden som adresse.')}
+  catch(e){toast('Kunne ikke kopiere koden.')}};
+
 let xlsPending=null;
 async function handleXls(f){
   const box=$('xlsBox');box.innerHTML='<p class="note">Læser '+esc(f.name)+'…</p>';
-  if(/\.html?$/i.test(f.name)){
-    const res=parseAbsCalendar(decodeText(await f.arrayBuffer()));
-    if(!res){box.innerHTML='<p class="note neg">Siden ligner ikke "Abs. Calendar" fra tidssystemet. Gem kalendersiden (Ctrl+S, "Kun HTML" eller "Hele siden") og vælg den her.</p>';return}
-    handleAbs(res,box,f.name);return;
-  }
+  if(/\.html?$/i.test(f.name)){importHtml(decodeText(await f.arrayBuffer()));return}
   try{
     if(!window.XLSX)await loadScript(XLSX_URL);
     const wb=/\.csv$/i.test(f.name)?XLSX.read(await f.text(),{type:'string'}):XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array'});

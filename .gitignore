@@ -5,7 +5,10 @@
 Flexregnskab backup*.json
 # Gemte sider fra tidssystemet (navn, personalenummer, fravær)
 Abs. Calendar*
+Month Journal*
 *_files/
+# Alle gemte HTML-sider i roden (appen ligger i app/)
+/*.html
 
 # Diverse
 .DS_Store

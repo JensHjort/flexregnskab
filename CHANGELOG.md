@@ -1,5 +1,15 @@
 # Ændringer
 
+## 1.2.0 (2026-11-10)
+
+- Import af "Month Journal" fra tidssystemet: tider, delte skift, fravær en del af dagen og systemets saldo pr. dag.
+- Systemets saldo bruges direkte på de dage, hvor den findes. Appen regner videre derfra.
+- Netto pr. dag bliver lig systemets "Actual", fordi systemets pause gemmes, når den afviger fra appens regel.
+- Pausereglen kan indstilles: frokost (min), fra hvor mange timer, og pause i alt over 9 timer. Ved import foreslås tidssystemets regel (30 min ved over 5 timer).
+- Bogmærke "Til Flexregnskab": kopierer siden fra tidssystemet med ét klik, og i appen trykker man Ctrl+V.
+- Rettelse: "Pres." fra fraværskalenderen bruges ikke længere som startsaldo, for det er ikke flexsaldoen.
+- CSV-datafilen gemmer også systemsaldo og systemets faktiske tid.
+
 ## 1.1.0 (2026-11-10)
 
 - Import af fraværskalenderen fra tidssystemet: gem siden "Abs. Calendar" som HTML og vælg den under Indstillinger → Importer fil.
