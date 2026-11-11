@@ -257,8 +257,9 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
           <label class="row" style="gap:6px"><input type="checkbox" data-hol="grundlov" style="width:auto"> Grundlovsdag</label>
           <label class="row" style="gap:6px"><input type="checkbox" data-hol="juleaften" style="width:auto"> Juleaftensdag</label>
           <label class="row" style="gap:6px"><input type="checkbox" data-hol="nytaarsaften" style="width:auto"> Nytårsaftensdag</label>
+          <label class="row" style="gap:6px"><input type="checkbox" data-hol="bededag2030" style="width:auto"> Store bededag fra 2030</label>
         </div>
-        <p class="note" style="margin-top:6px">Helligdagene (påske, Kristi himmelfart, pinse, jul og nytår) giver altid normtid 0.</p>
+        <p class="note" style="margin-top:6px">Helligdagene (påske, Kristi himmelfart, pinse, jul og nytår) giver altid normtid 0. Store bededag er afskaffet 2024–2029. Regeringen planlægger at genindføre den fra 2030, men det er ikke vedtaget endnu.</p>
       </div>
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
     </div>
@@ -306,7 +307,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.1';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -341,8 +342,9 @@ const clock=t=>{const d=new Date(t);return `${pad(d.getHours())}:${pad(d.getMinu
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Kunne ikke hente '+src.split('/').pop()+'. Er du online?'));document.head.appendChild(s)})}
 const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45,
-  hol:{maj1:true,grundlov:true,juleaften:true,nytaarsaften:false}};
-/* Danish public holidays. Easter by the anonymous Gregorian algorithm. Store bededag was abolished from 2024. */
+  hol:{maj1:true,grundlov:true,juleaften:true,nytaarsaften:false,bededag2030:true}};
+/* Danish public holidays. Easter by the anonymous Gregorian algorithm. Store bededag was abolished from 2024;
+   the government plans to bring it back from 2030 (bill expected 2027), so that part is a setting. */
 const HOL_CACHE={};
 function easter(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
   h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
@@ -350,7 +352,7 @@ function easter(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=
 function holidays(y,hol){const key=y+JSON.stringify(hol||{});if(HOL_CACHE[key])return HOL_CACHE[key];
   const e=easter(y),m={};const add=(iso,n)=>{m[iso]=n};
   add(isoOf(y,0,1),'Nytårsdag');add(addDays(e,-3),'Skærtorsdag');add(addDays(e,-2),'Langfredag');add(e,'Påskedag');add(addDays(e,1),'2. påskedag');
-  if(y<2024)add(addDays(e,26),'Store bededag');
+  if(y<2024||(y>=2030&&(hol||{}).bededag2030))add(addDays(e,26),'Store bededag');
   add(addDays(e,39),'Kristi himmelfartsdag');add(addDays(e,49),'Pinsedag');add(addDays(e,50),'2. pinsedag');
   add(isoOf(y,11,25),'Juledag');add(isoOf(y,11,26),'2. juledag');
   const h=hol||{};if(h.maj1)add(isoOf(y,4,1),'1. maj');if(h.grundlov)add(isoOf(y,5,5),'Grundlovsdag');

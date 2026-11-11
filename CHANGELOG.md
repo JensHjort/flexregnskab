@@ -1,5 +1,9 @@
 # Ændringer
 
+## 1.7.1 (2026-11-11)
+
+- Store bededag: regeringen planlægger at genindføre den fra 2030 (lovforslag ventes i 2027). Det er en indstilling, "Store bededag fra 2030", som er slået til. 2024–2029 er den ikke helligdag.
+
 ## 1.7.0 (2026-11-11)
 
 - Danske helligdage er indbygget (nytår, påske, Kristi himmelfart, pinse, jul, og Store bededag før 2024). De giver normtid 0 og tæller aldrig som "mangler". Navnet vises under datoen i ugen.
