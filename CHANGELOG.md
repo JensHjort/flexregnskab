@@ -1,5 +1,10 @@
 # Ændringer
 
+## 1.3.1 (2026-11-11)
+
+- Google Drev vises altid under Indstillinger → Konto og lagring, også før det er sat op.
+- Klient-ID kan indsættes direkte i appen. Appen viser den adresse, der skal registreres hos Google.
+
 ## 1.3.0 (2026-11-11)
 
 - Synkronisering med personligt Google Drev (filen `Flexregnskab.json`), så appen også kan bruges på mobilen.
