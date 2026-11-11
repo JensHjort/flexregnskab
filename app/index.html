@@ -292,7 +292,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.6.0';
+const APP_VERSION='1.6.1';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -1094,10 +1094,11 @@ if(window.opener)try{window.opener.postMessage({type:'flexregnskab-ready'},'*')}
 /* Bookmarklet. Runs inside the InterFlex tab (the only place allowed to read it). Written in old-style
    JavaScript so it also works if InterFlex runs in Internet Explorer mode. Serialised with toString(). */
 function flexBookmarklet(APP,MARK,SEP){
-  var pages=[],payload=null,appWin=null,appOrigin=null,sent=false,jdoc=null,adoc=null,base=null,pdoc=null,pArea=-1;
-  var JRN=/class="iflxMojou/,CAL=/iflxAbsenceCalendar/,MON=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
-  // Walk every frame we may read: find the journal, the absence calendar, InterFlex's folder and the biggest visible page for the panel.
-  function walk(w){try{var d=w.document,u=String(d.location.href),h=d.documentElement.innerHTML,mm=u.match(/^(https?:\/\/[^?#]*\/iflx\/[^\/]+\/)/);
+  var pages=[],payload=null,appWin=null,appOrigin=null,sent=false,jdoc=null,adoc=null,base=null,pdoc=null,pArea=-1,log=[],ifr=null;
+  var JRN=/class="?iflxMojou/i,CAL=/iflxAbsenceCalendar/,MON=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+  function html(d){return d.documentElement.outerHTML}
+  // Walk every frame we may read: journal, absence calendar, InterFlex's folder and the biggest visible page for the panel.
+  function walk(w){try{var d=w.document,u=String(d.location.href),h=d.documentElement.innerHTML,mm=u.match(/^(https?:\/\/[^?#]*\/iflx\/[^\/]+\/)/i);
       if(mm&&!base)base=mm[1];
       if(!jdoc&&d.forms&&d.forms.iflxDatePeriodFrm&&JRN.test(h))jdoc=d;
       if(!adoc&&CAL.test(h)&&!JRN.test(h))adoc=d;
@@ -1109,62 +1110,75 @@ function flexBookmarklet(APP,MARK,SEP){
   if(APP&&/^https?:/.test(APP)){try{appOrigin=APP.match(/^https?:\/\/[^\/]+/)[0];appWin=window.open(APP+'#modtag','flexregnskab')}catch(e){appWin=null}}
   var old=D.getElementById('flxPanel');if(old)old.parentNode.removeChild(old);
   var p=D.createElement('div');p.id='flxPanel';
-  p.style.cssText='position:fixed;z-index:2147483647;top:16px;right:16px;width:300px;background:#fff;color:#151a21;font:14px/1.45 Segoe UI,Arial,sans-serif;border:1px solid #dde1e7;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:14px 16px;text-align:left';
-  p.innerHTML='<div style="font-weight:700;margin-bottom:4px">Flexregnskab</div><div>Starter…</div><div style="margin-top:10px"></div>';
-  D.body.appendChild(p);var st=p.childNodes[1],bx=p.childNodes[2];
+  p.style.cssText='position:fixed;z-index:2147483647;top:16px;right:16px;width:320px;max-height:80%;overflow:auto;background:#fff;color:#151a21;font:14px/1.45 Segoe UI,Arial,sans-serif;border:1px solid #dde1e7;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:14px 16px;text-align:left';
+  p.innerHTML='<div style="font-weight:700;margin-bottom:4px">Flexregnskab</div><div>Starter…</div><div style="margin-top:10px"></div><pre style="display:none;white-space:pre-wrap;font:12px/1.4 Consolas,monospace;background:#f3f5f8;padding:8px;border-radius:6px;margin:8px 0 0"></pre>';
+  D.body.appendChild(p);var st=p.childNodes[1],bx=p.childNodes[2],pre=p.childNodes[3];
   function say(t){st.innerHTML=t}
+  function note(t){log.push(t)}
   function btn(t,primary,fn){var b=D.createElement('button');b.innerHTML=t;b.onclick=fn;
     b.style.cssText='font:inherit;font-weight:600;padding:7px 12px;margin:0 6px 6px 0;border-radius:8px;cursor:pointer;'+(primary?'border:0;background:#2f5bd3;color:#fff':'border:1px solid #dde1e7;background:#fff;color:#151a21');bx.appendChild(b);return b}
   function post(){if(appWin&&payload&&!sent){try{appWin.postMessage({type:'flexregnskab-import',payload:payload},appOrigin)}catch(e){}}}
   window.addEventListener('message',function(e){if(e.origin!==appOrigin||!e.data)return;
     if(e.data.type==='flexregnskab-ready')post();
-    if(e.data.type==='flexregnskab-received'){sent=true;say('Sendt til Flexregnskab. Bekræft importen i appen.')}});
+    if(e.data.type==='flexregnskab-received'){sent=true;say('Sendt til Flexregnskab. Bekræft importen i appen.'+(log.length?' Nogle måneder manglede, se Detaljer.':''))}});
   function copy(){var a=D.createElement('textarea');a.value=payload;a.style.cssText='position:fixed;top:0;left:0;opacity:0';D.body.appendChild(a);a.focus();a.select();
     var ok=false;try{ok=D.execCommand('copy')}catch(e){}a.parentNode.removeChild(a);
     say(ok?'Kopieret. Gå til Flexregnskab og tryk <b>Ctrl+V</b>.':'Kunne ikke kopiere. Gem siden med Ctrl+S og importer filen i stedet.')}
-  function finish(note){
+  function finish(msg){
+    if(ifr&&ifr.parentNode)ifr.parentNode.removeChild(ifr);
     var close=function(){p.parentNode.removeChild(p)};
-    if(!pages.length){say('Fandt ingen data. '+(note||'')+' Åbn Month Journal, og prøv igen.');btn('Luk',false,close);return}
+    if(log.length)btn('Detaljer',false,function(){pre.style.display='block';pre.textContent=log.join('\n')});
+    if(!pages.length){say('Fandt ingen data. '+(msg||''));btn('Luk',false,close);return}
     payload=MARK+pages.join(SEP);
-    say(pages.length+(pages.length===1?' side':' sider')+' hentet'+(note?'. '+note:'.')+(appWin?' Sender til appen…':''));
+    say(pages.length+(pages.length===1?' side':' sider')+' hentet'+(msg?'. '+msg:'.')+(appWin?' Sender til appen…':''));
     btn('Kopiér',!appWin,copy);btn('Luk',false,close);
     post();setTimeout(function(){if(appWin&&!sent)say(st.innerHTML.replace(' Sender til appen…','')+' Appen svarede ikke. Brug Kopiér og tryk Ctrl+V i appen.')},6000);
   }
   // Without a web address (e.g. a saved page) we can only take what is on screen.
-  if(!base){if(jdoc)pages.push(jdoc.documentElement.outerHTML);if(adoc)pages.push(adoc.documentElement.outerHTML);finish('');return}
-  function req(method,url,data,cb){var x=new XMLHttpRequest();x.open(method,url,true);
-    if(data)x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-    try{x.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
-    x.onreadystatechange=function(){if(x.readyState===4)cb(x.status>=200&&x.status<400?x.responseText:'')};
-    try{x.send(data||null)}catch(er){cb('')}}
-  function abs(u){if(/^https?:/.test(u))return u;if(u.charAt(0)==='/')return base.match(/^https?:\/\/[^\/]+/)[0]+u;return base+u}
+  if(!base){if(jdoc)pages.push(html(jdoc));if(adoc)pages.push(html(adoc));finish('');return}
   function fresh(u){return u+(u.indexOf('?')<0?'?':'&')+'_flx='+new Date().getTime()}
-  function formOf(d){var f=d&&d.forms&&d.forms.iflxDatePeriodFrm;if(!f)return null;var fl=[];
-    for(var i=0;i<f.elements.length;i++){var el=f.elements[i];if(el.name)fl.push([el.name,el.value])}
-    return{action:abs(f.getAttribute('action')||'/WebClient/servlet/com.iflx.web6020.servlets.iflxDatePeriodFrm'),fields:fl,
-      get:function(n){for(var i=0;i<fl.length;i++)if(fl[i][0]===n)return fl[i][1];return''}}}
-  function parse(t){try{return new DOMParser().parseFromString(t,'text/html')}catch(e){return null}}
-  function calendar(cb){if(adoc){pages.push(adoc.documentElement.outerHTML);cb();return}
-    say('Henter fraværskalenderen…');req('GET',fresh(base+'abscalendar.jsp'),null,function(t){if(t&&CAL.test(t))pages.push(t);cb()})}
-  function journalForm(cb){var F=formOf(jdoc);if(F&&F.get('_iflxDatePeriodFrm_daterangebegin')){cb(F);return}
-    say('Henter månedsjournalen…');req('GET',fresh(base+'mojoudata.jsp'),null,function(t){cb(t&&JRN.test(t)?formOf(parse(t)):null)})}
-  journalForm(function(F){
-    if(!F){calendar(function(){finish('Månedsjournalen kunne ikke hentes.')});return}
-    var b=F.get('_iflxDatePeriodFrm_daterangebegin'),e=F.get('_iflxDatePeriodFrm_daterangeend'),orig=F.get('_iflxDatePeriodFrm_begindate')||e;
+  function req(url,cb){var x=new XMLHttpRequest();x.open('GET',url,true);try{x.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
+    x.onreadystatechange=function(){if(x.readyState===4)cb(x.status>=200&&x.status<400?x.responseText:'',x.status)};try{x.send(null)}catch(er){cb('',0)}}
+  function calendar(cb){if(adoc){pages.push(html(adoc));cb();return}
+    say('Henter fraværskalenderen…');req(fresh(base+'abscalendar.jsp'),function(t,s){if(t&&CAL.test(t))pages.push(t);else note('Fraværskalender: svar '+s);cb()})}
+  function isMonth(t,date){var j=t&&t.match(/Journal\s+for\s*(\d{1,2})\s*\/\s*(\d{4})/i);return!!j&&+j[1]===+date.substr(4,2)&&+j[2]===+date.substr(0,4)}
+  /* The journal is driven in a hidden frame exactly like a person would: the page's own form is filled in and submitted,
+     so InterFlex gets the same request as when you click. Scripts in the hidden frame are not allowed to run. */
+  function mark(w){try{w.document.__flxOld=1;for(var i=0;i<w.frames.length;i++)mark(w.frames[i])}catch(e){}}
+  function findJ(w,date){try{var d=w.document;if(!d.__flxOld&&d.readyState==='complete'&&d.forms&&d.forms.iflxDatePeriodFrm){var h=d.documentElement.innerHTML;
+        if(JRN.test(h)&&(!date||isMonth(h,date)))return d}
+      for(var i=0;i<w.frames.length;i++){var r=findJ(w.frames[i],date);if(r)return r}}catch(e){}return null}
+  function describe(){try{var d=ifr.contentWindow.document,t=(d.body&&(d.body.innerText||d.body.textContent))||'';
+      var j=d.documentElement.innerHTML.match(/Journal\s+for\s*[\d\/]+/i);
+      return String(d.location.href).replace(/^.*\//,'')+' · '+(j?j[0]+' · ':'')+t.replace(/\s+/g,' ').substr(0,140)}catch(e){return 'kunne ikke læses ('+e.message+')'}}
+  function waitJ(date,cb){var t0=new Date().getTime();(function poll(){var d=findJ(ifr.contentWindow,date);if(d){cb(d);return}
+      if(new Date().getTime()-t0>20000){cb(null);return}setTimeout(poll,300)})()}
+  function submit(d,date,cb){try{var f=d.forms.iflxDatePeriodFrm;f._iflxDatePeriodFrm_action.value='reloadSpecificPeriod';
+      f._iflxDatePeriodFrm_reloaddate.value=date;mark(ifr.contentWindow);f.submit()}catch(e){note(date.substr(0,6)+': kunne ikke skifte måned ('+e.message+')');cb(null);return}
+    setTimeout(function(){waitJ(date,function(nd){if(!nd)note(date.substr(0,4)+'-'+date.substr(4,2)+': '+describe());cb(nd)})},400)}
+  function fresh_journal(cb){mark(ifr.contentWindow);ifr.src=fresh(base+'mojoudata.jsp');waitJ(null,cb)}
+  // If InterFlex answered with a frameset, start from a fresh journal page so frames never pile up inside each other.
+  function go(d,date,cb){var top=null;try{top=ifr.contentWindow.document}catch(e){}
+    if(d&&d===top&&!d.__flxOld){submit(d,date,cb);return}
+    fresh_journal(function(nd){if(!nd){note(date.substr(0,6)+': journalen kunne ikke genåbnes: '+describe());cb(null);return}submit(nd,date,cb)})}
+  say('Åbner månedsjournalen…');
+  ifr=D.createElement('iframe');ifr.name='flxFrame';
+  try{ifr.setAttribute('sandbox','allow-same-origin allow-forms')}catch(e){}
+  ifr.style.cssText='position:absolute;left:-10000px;top:0;width:900px;height:700px;border:0';
+  D.body.appendChild(ifr);try{ifr.contentWindow.name='flxFrame'}catch(e){}
+  ifr.src=fresh(base+'mojoudata.jsp');
+  waitJ(null,function(d){
+    if(!d){note('Journalen kunne ikke åbnes: '+describe());calendar(function(){finish('Månedsjournalen kunne ikke hentes, se Detaljer.')});return}
+    var f=d.forms.iflxDatePeriodFrm,v=function(n){return f[n]?f[n].value:''};
+    var b=v('_iflxDatePeriodFrm_daterangebegin'),e=v('_iflxDatePeriodFrm_daterangeend'),orig=v('_iflxDatePeriodFrm_begindate')||e;
     var months=[],y=+b.substr(0,4),m=+b.substr(4,2),ey=+e.substr(0,4),em=+e.substr(4,2);
     while(y<ey||(y===ey&&m<=em)){months.push(y+(m<10?'0':'')+m+'01');m++;if(m>12){m=1;y++}}
-    function body(date){var s=[];for(var i=0;i<F.fields.length;i++){var n=F.fields[i][0],v=F.fields[i][1];
-        if(n==='_iflxDatePeriodFrm_action')v='reloadSpecificPeriod';else if(n==='_iflxDatePeriodFrm_reloaddate')v=date;
-        s.push(encodeURIComponent(n)+'='+encodeURIComponent(v))}return s.join('&')}
-    function isMonth(t,date){var j=t&&t.match(/Journal for\s*(\d{1,2})\s*\/\s*(\d{4})/);return!!j&&+j[1]===+date.substr(4,2)&&+j[2]===+date.substr(0,4)}
-    // Change period on the server, then read the journal page itself (the reply may be a frameset).
-    function month(date,cb){req('POST',F.action,body(date),function(t){if(isMonth(t,date)&&JRN.test(t)){cb(t);return}
-      req('GET',fresh(base+'mojoudata.jsp'),null,function(t2){cb(isMonth(t2,date)&&JRN.test(t2)?t2:'')})})}
-    var i=0,failed=0;
+    if(!months.length){pages.push(html(d));note('Ingen periode i formularen ('+b+'–'+e+').');calendar(function(){finish('')});return}
+    var cur=d,i=0,failed=0;
     (function next(){
-      if(i>=months.length){req('POST',F.action,body(orig),function(){calendar(function(){finish(failed?failed+' måned(er) kunne ikke hentes':'')})});return}
-      var d=months[i++];say('Henter '+MON[+d.substr(4,2)-1]+' '+d.substr(0,4)+'… ('+i+' af '+months.length+')');
-      month(d,function(t){if(t)pages.push(t);else failed++;next()})})();
+      if(i>=months.length){say('Afslutter…');go(cur,orig,function(){calendar(function(){finish(failed?failed+' måned(er) kunne ikke hentes, se Detaljer.':'')})});return}
+      var dt=months[i++];say('Henter '+MON[+dt.substr(4,2)-1]+' '+dt.substr(0,4)+'… ('+i+' af '+months.length+')');
+      go(cur,dt,function(nd){if(nd){pages.push(html(nd));cur=nd}else{failed++;cur=findJ(ifr.contentWindow,null)||cur}next()})})();
   });
 }
 function bookmarkletCode(){

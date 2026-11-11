@@ -1,5 +1,12 @@
 # Ændringer
 
+## 1.6.1 (2026-11-11)
+
+- Rettelse: bogmærket hentede kun fraværsdage. Nu skifter det måned i en skjult ramme med InterFlex' egen formular, præcis som når man klikker, i stedet for baggrundsforespørgsler.
+- Den skjulte ramme må ikke køre InterFlex' scripts, så den ikke kan flytte eller lukke siden.
+- Virker, uanset om InterFlex svarer med journalen, en omdirigering eller en rammeside.
+- Panelet har en Detaljer-knap, der viser InterFlex' svar, hvis en måned ikke kan hentes.
+
 ## 1.6.0 (2026-11-11)
 
 - Rettelse: månedsjournalen genkendes nu også i InterFlex' almindelige visning. Før virkede kun udskriftsvisningen.
