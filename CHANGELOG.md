@@ -1,5 +1,9 @@
 # Ændringer
 
+## 1.5.3 (2026-11-11)
+
+- Tydeligere fejlbesked, når Google blokerer login, fordi appen stadig er i testtilstand.
+
 ## 1.5.2 (2026-11-11)
 
 - Google-klient-ID er lagt ind i config.js, så "Log ind med Google" virker direkte på alle enheder.

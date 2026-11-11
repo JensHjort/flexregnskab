@@ -292,7 +292,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.5.2';
+const APP_VERSION='1.5.3';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -418,7 +418,7 @@ const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',las
     const err=p.get('error')||'ukendt fejl',needsUser=/interaction_required|consent_required|login_required|account_selection_required/.test(err);
     if(auto&&needsUser){this.state='needauth';return}            // silent renewal failed: show the button, never loop
     if(tried==='none'&&needsUser){this.redirectNow('consent');return}
-    this.err=err==='access_denied'?'Du afviste adgangen til Google Drev.':'Google-login fejlede: '+err;this.state='error';
+    this.err=err==='access_denied'?'Google afviste login. Skrev Google "Adgangen er blokeret", så skal appen udgives i Google Cloud Console (Audience → Publish app), eller din konto skal tilføjes som testbruger. Ellers har du trykket Annuller.':'Google-login fejlede: '+err;this.state='error';
   },
   connect(){this.redirectNow(this.linked?'none':'consent')},
   // Fetch a new token without asking, at most every 10 minutes, and never when data from the bookmarklet is on its way.
