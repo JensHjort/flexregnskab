@@ -1,5 +1,9 @@
 # Ændringer
 
+## 1.5.2 (2026-11-11)
+
+- Google-klient-ID er lagt ind i config.js, så "Log ind med Google" virker direkte på alle enheder.
+
 ## 1.5.1 (2026-11-11)
 
 - Knappen "Log ind med Google" vises altid under Indstillinger. Er Google-login ikke sat op endnu, åbner den opsætningen med feltet til klient-ID.

@@ -5,7 +5,7 @@
 window.FLEX_CONFIG = {
   // Google Drev (personlig Google-konto). Indsæt "Client ID" fra Google Cloud Console,
   // fx '1234567890-abc123.apps.googleusercontent.com'. Se README.
-  googleClientId: '',
+  googleClientId: '22986206873-mckhreddmure1vimc5ul0rv2qdrl6uq8.apps.googleusercontent.com',
 
   msClientId: '',
   // Hvilke konti der kan logge ind:
