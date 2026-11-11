@@ -1,5 +1,12 @@
 # Ændringer
 
+## 1.7.0 (2026-11-11)
+
+- Danske helligdage er indbygget (nytår, påske, Kristi himmelfart, pinse, jul, og Store bededag før 2024). De giver normtid 0 og tæller aldrig som "mangler". Navnet vises under datoen i ugen.
+- 1. maj, Grundlovsdag, Juleaftensdag og Nytårsaftensdag kan slås til og fra under Indstillinger → Arbejdstid.
+- Synkronisering flettes nu dag for dag: hver dag beholder sin seneste ændring, også sletninger. Ændringer på telefon og computer går ikke længere tabt, hvis den ene var offline.
+- "Absence without Leave" fra InterFlex vises som "mangler stempling" og ikke som en fridag. Markeringen forsvinder, når du selv udfylder dagen.
+
 ## 1.6.3 (2026-11-11)
 
 Resultater fra en test af InterFlex:

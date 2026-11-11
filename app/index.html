@@ -250,6 +250,16 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
         <label class="f">Trækkes ved over (timer)<input id="s-pauseFrom" inputmode="decimal" class="n"></label>
         <label class="f">Pause i alt over 9 timer (min)<input id="s-p9" inputmode="numeric" class="n"></label>
       </div>
+      <div>
+        <h3 style="margin-bottom:8px">Fridage ud over helligdagene</h3>
+        <div class="row" id="holBox" style="gap:8px 18px">
+          <label class="row" style="gap:6px"><input type="checkbox" data-hol="maj1" style="width:auto"> 1. maj</label>
+          <label class="row" style="gap:6px"><input type="checkbox" data-hol="grundlov" style="width:auto"> Grundlovsdag</label>
+          <label class="row" style="gap:6px"><input type="checkbox" data-hol="juleaften" style="width:auto"> Juleaftensdag</label>
+          <label class="row" style="gap:6px"><input type="checkbox" data-hol="nytaarsaften" style="width:auto"> Nytårsaftensdag</label>
+        </div>
+        <p class="note" style="margin-top:6px">Helligdagene (påske, Kristi himmelfart, pinse, jul og nytår) giver altid normtid 0.</p>
+      </div>
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
     </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:16px">
@@ -296,7 +306,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.6.3';
+const APP_VERSION='1.7.0';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -330,24 +340,64 @@ const hm=h=>{const m=Math.round(Math.abs(h)*60);return `${h<0?'−':''}${Math.fl
 const clock=t=>{const d=new Date(t);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Kunne ikke hente '+src.split('/').pop()+'. Er du online?'));document.head.appendChild(s)})}
-const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45};
+const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45,
+  hol:{maj1:true,grundlov:true,juleaften:true,nytaarsaften:false}};
+/* Danish public holidays. Easter by the anonymous Gregorian algorithm. Store bededag was abolished from 2024. */
+const HOL_CACHE={};
+function easter(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
+  return isoOf(y,mo-1,da)}
+function holidays(y,hol){const key=y+JSON.stringify(hol||{});if(HOL_CACHE[key])return HOL_CACHE[key];
+  const e=easter(y),m={};const add=(iso,n)=>{m[iso]=n};
+  add(isoOf(y,0,1),'Nytårsdag');add(addDays(e,-3),'Skærtorsdag');add(addDays(e,-2),'Langfredag');add(e,'Påskedag');add(addDays(e,1),'2. påskedag');
+  if(y<2024)add(addDays(e,26),'Store bededag');
+  add(addDays(e,39),'Kristi himmelfartsdag');add(addDays(e,49),'Pinsedag');add(addDays(e,50),'2. pinsedag');
+  add(isoOf(y,11,25),'Juledag');add(isoOf(y,11,26),'2. juledag');
+  const h=hol||{};if(h.maj1)add(isoOf(y,4,1),'1. maj');if(h.grundlov)add(isoOf(y,5,5),'Grundlovsdag');
+  if(h.juleaften)add(isoOf(y,11,24),'Juleaftensdag');if(h.nytaarsaften)add(isoOf(y,11,31),'Nytårsaftensdag');
+  return HOL_CACHE[key]=m}
+const holidayOf=(iso,st)=>holidays(+iso.slice(0,4),(st||S.settings).hol)[iso]||'';
 
 /* ---------- state + local storage ---------- */
 const S={settings:{...DEF},months:{},rows:{},updatedAt:0};
 const rebuildRows=()=>{S.rows={};for(const k in S.months)Object.assign(S.rows,S.months[k]||{})};
 const monthKey=iso=>'rows-'+iso.slice(0,7);
 const LS='flexregnskab-data';
-function normSettings(st){const s={...DEF,...(st||{})};if(st&&st.ferieDays==null&&st.startFerie!=null)s.ferieDays=st.startFerie;return s}
+function normSettings(st){const s={...DEF,...(st||{})};s.hol={...DEF.hol,...((st&&st.hol)||{})};if(st&&st.ferieDays==null&&st.startFerie!=null)s.ferieDays=st.startFerie;return s}
 const Store={
-  load(){try{const raw=JSON.parse(localStorage.getItem(LS)||'null');if(raw){S.settings=normSettings(raw.settings);S.months=raw.months||{};S.updatedAt=raw.updatedAt||0;}}catch(e){}rebuildRows()},
-  snapshot(){return{app:'flexregnskab',v:3,updatedAt:S.updatedAt,settings:S.settings,months:S.months}},
-  persist(touch=true){if(touch)S.updatedAt=Date.now();
+  load(){try{const raw=JSON.parse(localStorage.getItem(LS)||'null');if(raw){S.settings=normSettings(raw.settings);S.months=raw.months||{};S.deleted=raw.deleted||{};S.updatedAt=raw.updatedAt||0;}}catch(e){}rebuildRows();this.remember()},
+  snapshot(){return{app:'flexregnskab',v:4,updatedAt:S.updatedAt,settings:S.settings,months:S.months,deleted:S.deleted||{}}},
+  // Stamp every day that changed since the last save (and every removed day) so devices can be merged day by day.
+  stamp(){const now=Date.now(),seen=this.seen||{},next={};S.deleted=S.deleted||{};
+    for(const iso in S.rows){const r=S.rows[iso],{t,...body}=r,j=JSON.stringify(body);next[iso]=j;if(seen[iso]!==j||!r.t){if(seen[iso]!==j)r.t=now;else if(!r.t)r.t=0;delete S.deleted[iso]}}
+    for(const iso in seen)if(!(iso in S.rows))S.deleted[iso]=now;
+    const sj=JSON.stringify({...S.settings,t:0});if(this.seenSettings!==undefined&&this.seenSettings!==sj)S.settings.t=now;this.seenSettings=sj;
+    this.seen=next},
+  remember(){const next={};for(const iso in S.rows){const{t,...body}=S.rows[iso];next[iso]=JSON.stringify(body)}this.seen=next;this.seenSettings=JSON.stringify({...S.settings,t:0})},
+  persist(touch=true){if(touch){this.stamp();S.updatedAt=Date.now()}else this.remember();
     try{localStorage.setItem(LS,JSON.stringify(this.snapshot()))}catch(e){toast('Kunne ikke gemme på enheden.')}
     if(touch){Cloud.schedule();FileSync.schedule();GDrive.schedule();}},
-  apply(d){S.settings=normSettings(d.settings);S.months=d.months||{};S.updatedAt=d.updatedAt||Date.now();rebuildRows();this.persist(false);renderAll()},
+  apply(d){S.settings=normSettings(d.settings);S.months=d.months||{};S.deleted=d.deleted||{};S.updatedAt=d.updatedAt||Date.now();rebuildRows();this.persist(false);renderAll()},
   saveSettings(o){S.settings={...o};this.persist();renderAll();return Promise.resolve()},
   saveMonth(key,rows){if(!rows||!Object.keys(rows).length)delete S.months[key];else S.months[key]=rows;rebuildRows();this.persist();renderAll();return Promise.resolve()}
 };
+/* Merge two copies (this device and the cloud) day by day: for each day the newest change wins, including deletions.
+   Days without a time stamp (older data) keep this device's version. Returns the merged copy and what has to happen. */
+function mergeDocs(L,R){
+  const rowsOf=d=>{const o={};for(const k in (d.months||{}))Object.assign(o,d.months[k]);return o};
+  const lr=rowsOf(L),rr=rowsOf(R),ld=L.deleted||{},rd=R.deleted||{},out={},del={};
+  for(const iso of new Set([...Object.keys(lr),...Object.keys(rr),...Object.keys(ld),...Object.keys(rd)])){
+    const c=[[lr[iso],lr[iso]?(lr[iso].t||0):-1,0],[rr[iso],rr[iso]?(rr[iso].t||0):-1,1],[null,iso in ld?ld[iso]:-1,2],[null,iso in rd?rd[iso]:-1,3]];
+    c.sort((a,b)=>b[1]-a[1]||a[2]-b[2]);
+    if(c[0][0])out[iso]=c[0][0];else del[iso]=c[0][1];
+  }
+  const months={};for(const iso of Object.keys(out).sort())(months[monthKey(iso)]=months[monthKey(iso)]||{})[iso]=out[iso];
+  const ls=L.settings||{},rs=R.settings||{},settings=(rs.t||0)>(ls.t||0)?rs:ls;
+  const doc={app:'flexregnskab',v:4,updatedAt:Math.max(L.updatedAt||0,R.updatedAt||0),settings,months,deleted:del};
+  const body=d=>JSON.stringify([d.settings,d.months,d.deleted||{}]);
+  return{doc,changedLocal:body(doc)!==body(L),needPush:body(doc)!==body(R)};
+}
+function syncFrom(remote){const m=mergeDocs(Store.snapshot(),remote&&remote.app==='flexregnskab'?remote:{});if(m.changedLocal)Store.apply(m.doc);return m.needPush}
 
 /* ---------- cloud: each person's own OneDrive (SharePoint) via Microsoft login ---------- */
 const Cloud={app:null,account:null,state:'off',last:null,timer:null,busy:false,pending:false,err:'',
@@ -379,9 +429,7 @@ const Cloud={app:null,account:null,state:'off',last:null,timer:null,busy:false,p
       if(res.status===404){this.busy=false;return this.push()}
       if(!res.ok)throw new Error('OneDrive svarede '+res.status);
       const d=await res.json();
-      const remote=(d&&d.app==='flexregnskab'&&d.updatedAt)||0;
-      if(remote>(S.updatedAt||0)){Store.apply(d)}
-      else if((S.updatedAt||0)>remote){this.busy=false;return this.push()}
+      if(syncFrom(d)){this.busy=false;return this.push()}
       this.last=Date.now();this.set('ok');
     }catch(e){this.set(navigator.onLine?'error':'offline',e)}
     this.busy=false;
@@ -476,9 +524,8 @@ const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',las
       const res=await this.api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`);
       if(res.status===404){this.fileId=null;this.save();this.busy=false;return this.push()}
       if(!res.ok)throw new Error('Google Drev svarede '+res.status);
-      const d=await res.json(),remote=(d&&d.app==='flexregnskab'&&d.updatedAt)||0;
-      if(remote>(S.updatedAt||0))Store.apply(d);
-      else if((S.updatedAt||0)>remote){this.busy=false;return this.push()}
+      const d=await res.json();
+      if(syncFrom(d)){this.busy=false;return this.push()}
       this.pending=false;this.last=Date.now();this.set('ok');
     }catch(e){if(this.state!=='needauth')this.set(navigator.onLine?'error':'offline',e)}
     this.busy=false;
@@ -694,9 +741,9 @@ function compute(){
     const manual=r&&r.pause!=null&&r.pause!==''?+r.pause:null;
     const pause=brutto==null?null:(manual!=null?manual:autoP);
     const netto=brutto==null?0:Math.max(0,brutto-pause/60);
-    const c=absClass(r&&r.absence);
+    const c=absClass(r&&r.absence),hol=we?'':holidayOf(iso,st);
     const normDay=we?0:(pnum(st.norm&&st.norm[wd])??7.4);
-    const norm=(c==='ferie'||c==='syg'||c==='fri')?0:normDay;
+    const norm=(c==='ferie'||c==='syg'||c==='fri'||hol)?0:normDay;
     const open=(fut||isToday)&&brutto==null&&c!=='flexfri';
     let flex=open?0:netto-norm;
     // The time system's own balance wins where it exists (past days only).
@@ -705,8 +752,9 @@ function compute(){
     else if(sys!=null){if(started)flex=sys-saldo;saldo=sys;started=true;}
     else if(started)saldo+=flex;
     if(sys!=null&&iso===start&&started)saldo=sys;
-    const missing=started&&!fut&&!isToday&&!we&&!c&&brutto==null&&sys==null;
-    map[iso]={iso,wd,we,fut,isToday,r,s,e,brutto,autoP,manual,pause,netto,norm,flex,c,open,missing,sys,saldo:started?saldo:null};
+    const iflxMiss=!!(r&&r.iflxMissing&&brutto==null);
+    const missing=started&&!fut&&!isToday&&!we&&!c&&!hol&&brutto==null&&(sys==null||iflxMiss);
+    map[iso]={iso,wd,we,fut,isToday,r,s,e,brutto,autoP,manual,pause,netto,norm,flex,c,open,missing,iflxMiss,hol,sys,saldo:started?saldo:null};
   }
   CALC=map;return map;
 }
@@ -718,7 +766,7 @@ const saldoNow=()=>{const t=todayISO();return CALC[t]?CALC[t].saldo:null};
 function buildWeek(){
   builtWeek=weekStart;
   $('days').innerHTML=[0,1,2,3,4,5,6].map(i=>{const iso=addDays(weekStart,i),d=parseIso(iso);
-    return `<div class="day" id="d-${iso}" data-iso="${iso}">
+    return `<div class="day" id="d-${iso}" data-iso="${iso}" data-date="${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]}">
       <div class="dn"><b>${WDL[i][0].toUpperCase()+WDL[i].slice(1)}</b><small>${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]}</small></div>
       <div class="st"><span class="lbl-m">Mødt</span><input type="time" data-k="start" aria-label="Mødt ${WDL[i]}"></div>
       <div class="en"><span class="lbl-m">Gået</span><input type="time" data-k="end" aria-label="Gået ${WDL[i]}"></div>
@@ -739,7 +787,8 @@ function refreshWeek(){
       const v=k==='pause'?(r.pause??''):k==='absence'?(ABS.some(o=>o[0]===r.absence)?r.absence:(r.absence?'Fri':'')):(r[k]||'');
       if(inp.value!==String(v))inp.value=v;}
     el.querySelector('[data-k=pause]').placeholder=x.brutto!=null&&x.manual==null?String(x.autoP):'auto';
-    el.querySelector('.net').innerHTML=x.brutto!=null?`<span class="net">${f2(x.netto)}</span>`:x.missing?'<span class="miss">mangler</span>':'';
+    el.querySelector('.net').innerHTML=x.brutto!=null?`<span class="net">${f2(x.netto)}</span>`:x.iflxMiss?'<span class="miss" title="InterFlex har ingen stempling denne dag (Absence without Leave)">mangler stempling</span>':x.missing?'<span class="miss">mangler</span>':'';
+    el.querySelector('.dn small').textContent=el.dataset.date+(x.hol?' · '+x.hol:'');
     el.querySelector('.flx').innerHTML=(x.open||(x.we&&!x.brutto))?'':`<span class="chip ${sgn(x.flex)||'zero'}">${fs(x.flex)}</span>`;
     tn+=x.netto;tf+=x.flex;tnorm+=x.open?0:x.norm;
   }
@@ -768,7 +817,8 @@ function renderToday(){
 async function stamp(k){const t=todayISO(),n=new Date(),v=`${pad(n.getHours())}:${pad(n.getMinutes())}`;
   await saveDay(t,{...(S.rows[t]||{}),[k]:v});toast(k==='start'?`Mødt ind ${v}`:`Gået hjem ${v}`);}
 async function saveDay(iso,row){
-  const clean={};for(const k of['start','end','pause','absence','comment','saldo','sysActual','sysNorm'])if(row[k]!=null&&row[k]!=='')clean[k]=row[k];
+  if(row.start||row.end||row.absence)delete row.iflxMissing;   // the user has filled the day in
+  const clean={};for(const k of['start','end','pause','absence','comment','saldo','sysActual','sysNorm','iflxMissing'])if(row[k]!=null&&row[k]!=='')clean[k]=row[k];
   const key=monthKey(iso),rows={...(S.months[key]||{})};
   if(Object.keys(clean).length)rows[iso]=clean;else delete rows[iso];
   await Store.saveMonth(key,rows);
@@ -838,6 +888,7 @@ function fillSettings(){
   if(!$('normFields').children.length)$('normFields').innerHTML=WD.slice(0,5).map((n,i)=>`<label class="f">${n}<input id="s-norm${i}" inputmode="decimal" class="n"></label>`).join('');
   for(const f of SF){const el=$('s-'+f);if(el===act)continue;const v=st[f];el.value=['startFlex','ferieDays','pauseFrom'].includes(f)?String(v??'').replace('.',','):(v??'');}
   for(let i=0;i<5;i++){const el=$('s-norm'+i);if(el!==act)el.value=f2(pnum(st.norm&&st.norm[i])??7.4);}
+  document.querySelectorAll('[data-hol]').forEach(cb=>{cb.checked=!!(st.hol&&st.hol[cb.dataset.hol])});
 }
 let sT=null;
 function settingsChanged(){clearTimeout(sT);$('saveState').textContent='Gemmer…';
@@ -1014,6 +1065,7 @@ function journalToRow(d,old,st){
   const notes=[];
   for(const a of d.abs){
     const cl=absClass(a.reason);
+    if(!a.st&&!a.en&&!work.length&&/absence without leave|ukendt fravær/i.test(a.reason)){row.iflxMissing=1;notes.push('Mangler stempling i InterFlex');continue}
     if(!a.st&&!a.en&&!work.length){row.absence={ferie:'Ferie',syg:'Syg',flexfri:'Flexfri'}[cl]||'Fri';if(row.absence==='Fri'||/feriefri/i.test(a.reason))notes.push(a.reason);}
     else notes.push(a.reason+(a.st?` ${a.st}–${a.en||''}`:''));
   }
@@ -1268,6 +1320,7 @@ $('yearSel').onchange=e=>{viewYear=+e.target.value;compute();renderOverview()};
 $('monthTbl').onclick=e=>{const tr=e.target.closest('tr[data-m]');if(!tr)return;weekStart=mondayOf(isoOf(viewYear,+tr.dataset.m,1));compute();location.hash='uge';refreshWeek()};
 for(const f of SF)$('s-'+f).addEventListener('input',settingsChanged);
 $('normFields').addEventListener('input',settingsChanged);
+$('holBox').addEventListener('change',e=>{const k=e.target.dataset.hol;if(!k)return;Store.saveSettings({...S.settings,hol:{...S.settings.hol,[k]:e.target.checked}})});
 $('xlsxBtn').onclick=exportXlsx;
 $('jsonBtn').onclick=()=>offer(`Flexregnskab backup ${todayISO()}.json`,new Blob([JSON.stringify(Store.snapshot(),null,1)],{type:'application/json'}));
 $('restoreFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
