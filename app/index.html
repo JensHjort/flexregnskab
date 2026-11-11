@@ -215,14 +215,14 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
     </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:14px">
-      <h2>Hent fra tidssystemet</h2>
+      <h2>Hent fra InterFlex</h2>
       <ol class="note" style="padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px">
-        <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang.
+        <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang, og igen hvis appen flytter til en ny adresse.
           <div class="row" style="margin-top:8px"><a class="btn primary" id="bmLink" href="#" title="Træk mig op i favoritlinjen">⤓ Til Flexregnskab</a><button class="ghost" id="bmCopy">Kopiér koden i stedet</button></div></li>
-        <li>Åbn <b>Month Journal</b> eller <b>Abs. Calendar</b> i tidssystemet, og klik på bogmærket. Siden bliver kopieret.</li>
-        <li>Kom tilbage hertil og tryk <b>Ctrl+V</b>. Du ser, hvad der importeres, før det gemmes.</li>
+        <li>Åbn <b>Month Journal</b> i InterFlex, og klik på bogmærket. Det henter <b>alle de måneder, InterFlex viser</b>, på én gang.</li>
+        <li id="bmStep3">Appen åbner af sig selv med data klar. Du ser, hvad der importeres, og trykker Importer.</li>
       </ol>
-      <p class="note">Du kan også gemme siden med Ctrl+S og vælge den med <b>Importer fil</b> herunder.</p>
+      <p class="note">Fravær for hele året: åbn <b>Abs. Calendar</b>, og klik på bogmærket. Virker bogmærket ikke, så gem siden med Ctrl+S og vælg den med <b>Importer fil</b> herunder.</p>
     </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:16px">
       <h2>Data</h2>
@@ -256,7 +256,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.3.1';
+const APP_VERSION='1.4.0';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -981,8 +981,8 @@ function handleJournal(res,box){
   const ex=days.filter(d=>S.rows[d.iso]&&(S.rows[d.iso].start||S.rows[d.iso].end)).length;
   jrnPending={res,days,rule};
   box.innerHTML=`<div class="box">
-    <div><b>Månedsjournal for ${MONTHS[res.m]} ${res.y}</b>: ${days.length} dage, ${withTimes} med tider${partial?`, ${partial} med fravær en del af dagen`:''}.
-      ${last?`<div>Saldo i tidssystemet ${+last.iso.slice(8)}. ${MONTHS[res.m]}: <b class="n">${fs(last.saldo)}</b> t. Den bruges direkte i appen.</div>`:''}
+    <div><b>Månedsjournal for ${res.label||MONTHS[res.m]+' '+res.y}</b>: ${days.length} dage, ${withTimes} med tider${partial?`, ${partial} med fravær en del af dagen`:''}.
+      ${last?`<div>Saldo i InterFlex ${+last.iso.slice(8)}. ${MONTHS[+last.iso.slice(5,7)-1]}: <b class="n">${fs(last.saldo)}</b> t. Den bruges direkte i appen.</div>`:''}
       ${ex?`<div class="note">${ex} dage har allerede tider i appen. De bliver erstattet af tidssystemets tider.</div>`:''}</div>
     ${ruleDiffers?`<label class="row" style="gap:8px;font-size:15px;align-items:flex-start"><input type="checkbox" id="jrnRule" checked style="width:auto;margin-top:4px">
       <span>Brug tidssystemets pauseregel: ${rule.p} min ved over ${dnum(rule.from)} timer${rule.over9?`, også over 9 timer`:''}. Appen trækker i dag ${st.p6} min ved over ${dnum(pnum(st.pauseFrom)??6)} timer og ${st.p9} min over 9 timer.</span></label>`:''}
@@ -1001,32 +1001,107 @@ function handleJournal(res,box){
   };
 }
 const dnum=n=>String(n).replace('.',',');
-// Recognise any page from the time system and show the right import.
+// Recognise one or more pages from InterFlex (a bookmarklet bundle holds several) and show the right import.
+const BM_MARK='FLEXREGNSKAB-IMPORT',BM_SEP='\n<!--FLEXREGNSKAB-SIDE-->\n';
 function importHtml(text){
-  const box=$('xlsBox');
-  const j=parseMonthJournal(text);if(j){handleJournal(j,box);return true}
-  const a=parseAbsCalendar(text);if(a){handleAbs(a,box);return true}
-  box.innerHTML='<p class="note neg">Siden ligner hverken "Month Journal" eller "Abs. Calendar" fra tidssystemet.</p>';return false;
+  const box=$('xlsBox'),pages=text.split(BM_SEP).filter(p=>p.trim());
+  const journals=[],cals=[];
+  for(const p of pages){const j=parseMonthJournal(p);if(j){journals.push(j);continue}const a=parseAbsCalendar(p);if(a)cals.push(a)}
+  if(!journals.length&&!cals.length){box.innerHTML='<p class="note neg">Siden ligner hverken "Month Journal" eller "Abs. Calendar" fra InterFlex.</p>';return false}
+  box.innerHTML='<div id="impJ" style="display:flex;flex-direction:column;gap:12px"></div><div id="impA" style="margin-top:12px"></div>';
+  if(journals.length){
+    journals.sort((a,b)=>a.y-b.y||a.m-b.m);
+    const seen=new Map();for(const j of journals)for(const d of j.days)seen.set(d.iso,d);
+    const f=journals[0],l=journals[journals.length-1];
+    const label=journals.length===1?`${MONTHS[f.m]} ${f.y}`:f.y===l.y?`${MONTHS[f.m]}–${MONTHS[l.m]} ${l.y}`:`${MONTHS[f.m]} ${f.y} – ${MONTHS[l.m]} ${l.y}`;
+    handleJournal({y:l.y,m:l.m,label,days:[...seen.values()].sort((a,b)=>a.iso<b.iso?-1:1)},$('impJ'));
+  }
+  if(cals.length)handleAbs(cals[cals.length-1],$('impA'));
+  return true;
 }
-const BM_MARK='FLEXREGNSKAB-IMPORT';
+function receiveImport(payload){
+  location.hash='indstillinger';importHtml(payload.slice(BM_MARK.length));
+  setTimeout(()=>$('xlsBox').scrollIntoView({behavior:'smooth',block:'center'}),80);
+}
 document.addEventListener('paste',e=>{
   const t=e.clipboardData&&e.clipboardData.getData('text');if(!t)return;
-  const tag=t.startsWith(BM_MARK);
-  if(!tag&&!/iflxMojouPrt|iflxAbsenceCalendar/.test(t))return;
-  e.preventDefault();location.hash='indstillinger';
-  importHtml(tag?t.slice(BM_MARK.length):t);
-  setTimeout(()=>$('xlsBox').scrollIntoView({behavior:'smooth',block:'center'}),50);
+  if(t.startsWith(BM_MARK)){e.preventDefault();receiveImport(t);return}
+  if(/iflxMojouPrt|iflxAbsenceCalendar/.test(t)){e.preventDefault();receiveImport(BM_MARK+t)}
 });
+// Data sent straight from the bookmarklet (InterFlex tab opened this app). Nothing is saved before the user confirms.
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='flexregnskab-import'||typeof d.payload!=='string'||!d.payload.startsWith(BM_MARK))return;
+  try{e.source&&e.source.postMessage({type:'flexregnskab-received'},e.origin==='null'?'*':e.origin)}catch(_){}
+  window.focus();receiveImport(d.payload);toast('Data modtaget fra InterFlex. Tjek og bekræft importen.');
+});
+if(window.opener)try{window.opener.postMessage({type:'flexregnskab-ready'},'*')}catch(e){}
 
-// Bookmarklet: runs inside the time system's tab (the only place allowed to read it) and copies the page to the clipboard.
-const BOOKMARKLET="(function(){var M='"+BM_MARK+"';function g(w){try{var h=w.document.documentElement.outerHTML;if(/iflxMojouPrt|iflxAbsenceCalendar/.test(h))return h;for(var i=0;i<w.frames.length;i++){var r=g(w.frames[i]);if(r)return r}}catch(e){}return null}"+
-  "var h=g(window.top)||g(window);if(!h){alert('Flexregnskab: Åbn Month Journal eller Abs. Calendar i tidssystemet, og klik så på bogmærket.');return}"+
-  "var t=M+h;function ok(){alert('Kopieret til Flexregnskab. Gå til appen og tryk Ctrl+V.')}"+
-  "function fb(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.focus();a.select();var s=false;try{s=document.execCommand('copy')}catch(e){}a.remove();s?ok():alert('Flexregnskab: Kunne ikke kopiere. Gem siden med Ctrl+S og importer filen i stedet.')}"+
-  "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(ok,fb)}else fb()})();";
-$('bmLink').href='javascript:'+encodeURIComponent(BOOKMARKLET);
+/* Bookmarklet. Runs inside the InterFlex tab (the only place allowed to read it). Written in old-style
+   JavaScript so it also works if InterFlex runs in Internet Explorer mode. Serialised with toString(). */
+function flexBookmarklet(APP,MARK,SEP){
+  var D=document,pages=[],payload=null,appWin=null,appOrigin=null,sent=false;
+  function find(w){try{var d=w.document;if(d.forms.iflxDatePeriodFrm||/iflxMojouPrt|iflxAbsenceCalendar/.test(d.documentElement.innerHTML))return d;
+    for(var i=0;i<w.frames.length;i++){var r=find(w.frames[i]);if(r)return r}}catch(e){}return null}
+  var doc=find(window.top)||find(window);
+  if(!doc){alert('Flexregnskab: Åbn Month Journal eller Abs. Calendar i InterFlex, og klik så på bogmærket.');return}
+  if(doc.body&&doc.body.tagName==='BODY')D=doc;
+  if(APP&&/^https?:/.test(APP)){try{appOrigin=APP.match(/^https?:\/\/[^\/]+/)[0];appWin=window.open(APP+'#modtag','flexregnskab')}catch(e){appWin=null}}
+  var old=D.getElementById('flxPanel');if(old)old.parentNode.removeChild(old);
+  var p=D.createElement('div');p.id='flxPanel';
+  p.style.cssText='position:fixed;z-index:2147483647;top:16px;right:16px;width:300px;background:#fff;color:#151a21;font:14px/1.45 Segoe UI,Arial,sans-serif;border:1px solid #dde1e7;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:14px 16px;text-align:left';
+  p.innerHTML='<div style="font-weight:700;margin-bottom:4px">Flexregnskab</div><div></div><div style="margin-top:10px"></div>';
+  D.body.appendChild(p);var st=p.childNodes[1],bx=p.childNodes[2];
+  function say(t){st.innerHTML=t}
+  function btn(t,primary,fn){var b=D.createElement('button');b.innerHTML=t;b.onclick=fn;
+    b.style.cssText='font:inherit;font-weight:600;padding:7px 12px;margin:0 6px 6px 0;border-radius:8px;cursor:pointer;'+(primary?'border:0;background:#2f5bd3;color:#fff':'border:1px solid #dde1e7;background:#fff;color:#151a21');bx.appendChild(b);return b}
+  function post(){if(appWin&&payload&&!sent){try{appWin.postMessage({type:'flexregnskab-import',payload:payload},appOrigin)}catch(e){}}}
+  window.addEventListener('message',function(e){if(e.origin!==appOrigin||!e.data)return;
+    if(e.data.type==='flexregnskab-ready')post();
+    if(e.data.type==='flexregnskab-received'){sent=true;say('Sendt til Flexregnskab. Bekræft importen i appen.')}});
+  function copy(){var a=D.createElement('textarea');a.value=payload;a.style.cssText='position:fixed;top:0;left:0;opacity:0';D.body.appendChild(a);a.focus();a.select();
+    var ok=false;try{ok=D.execCommand('copy')}catch(e){}a.parentNode.removeChild(a);
+    say(ok?'Kopieret. Gå til Flexregnskab og tryk <b>Ctrl+V</b>.':'Kunne ikke kopiere. Gem siden med Ctrl+S og importer filen i stedet.')}
+  function finish(note){
+    payload=MARK+pages.join(SEP);
+    say(pages.length+(pages.length===1?' side':' sider')+' hentet'+(note?'. '+note:'.')+(appWin?' Sender til appen…':''));
+    btn('Kopiér',!appWin,copy);btn('Luk',false,function(){p.parentNode.removeChild(p)});
+    post();setTimeout(function(){if(appWin&&!sent)say(st.innerHTML.replace(' Sender til appen…','')+' Appen svarede ikke. Brug Kopiér og tryk Ctrl+V i appen.')},6000);
+  }
+  var form=doc.forms.iflxDatePeriodFrm;
+  if(!form||!form._iflxDatePeriodFrm_daterangebegin){pages.push(doc.documentElement.outerHTML);finish('');return}
+  function v(n){return form[n]?form[n].value:''}
+  var b=v('_iflxDatePeriodFrm_daterangebegin'),e=v('_iflxDatePeriodFrm_daterangeend'),orig=v('_iflxDatePeriodFrm_begindate')||e;
+  var months=[],y=+b.substr(0,4),m=+b.substr(4,2),ey=+e.substr(0,4),em=+e.substr(4,2);
+  while(y<ey||(y===ey&&m<=em)){months.push(y+(m<10?'0':'')+m+'01');m++;if(m>12){m=1;y++}}
+  if(!months.length){pages.push(doc.documentElement.outerHTML);finish('');return}
+  var MON=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+  function body(date){var s=[],els=form.elements;for(var i=0;i<els.length;i++){var el=els[i];if(!el.name)continue;
+      var val=el.name==='_iflxDatePeriodFrm_action'?'reloadSpecificPeriod':el.name==='_iflxDatePeriodFrm_reloaddate'?date:el.value;
+      s.push(encodeURIComponent(el.name)+'='+encodeURIComponent(val))}return s.join('&')}
+  function load(date,cb){var x=new XMLHttpRequest();x.open('POST',form.action,true);
+    x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+    try{x.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
+    x.onreadystatechange=function(){if(x.readyState!==4)return;
+      var t=x.status===200?x.responseText:'';
+      if(t&&t.indexOf('iflxMojouPrt')<0){var fr=t.match(/<i?frame[^>]+src=["']([^"']+)["']/i);
+        if(fr){var y2=new XMLHttpRequest();y2.open('GET',fr[1],true);try{y2.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
+          y2.onreadystatechange=function(){if(y2.readyState===4)cb(y2.status===200?y2.responseText:'')};y2.send();return}}
+      cb(t)};
+    x.send(body(date))}
+  var i=0,failed=0;
+  (function next(){
+    if(i>=months.length){load(orig,function(){});finish(failed?failed+' måned(er) kunne ikke hentes':'');return}
+    var d=months[i++];say('Henter '+MON[+d.substr(4,2)-1]+' '+d.substr(0,4)+'… ('+i+' af '+months.length+')');
+    load(d,function(t){if(t&&t.indexOf('iflxMojouPrt')>=0)pages.push(t);else failed++;next()})})();
+}
+function bookmarkletCode(){
+  const app=location.protocol.startsWith('http')?location.origin+location.pathname:'';
+  return 'javascript:'+encodeURIComponent('('+flexBookmarklet.toString()+')('+JSON.stringify(app)+','+JSON.stringify(BM_MARK)+','+JSON.stringify(BM_SEP)+')');
+}
+$('bmLink').href=bookmarkletCode();
+if(!location.protocol.startsWith('http'))$('bmStep3').innerHTML='Klik <b>Kopiér</b> i panelet, kom tilbage hertil, og tryk <b>Ctrl+V</b>. (Ligger appen på en webadresse, åbner den af sig selv med data klar.)';
 $('bmLink').onclick=e=>{e.preventDefault();toast('Træk knappen op i favoritlinjen i stedet for at klikke.')};
-$('bmCopy').onclick=async()=>{const code='javascript:'+encodeURIComponent(BOOKMARKLET);
+$('bmCopy').onclick=async()=>{const code=bookmarkletCode();
   try{await navigator.clipboard.writeText(code);toast('Koden er kopieret. Opret et nyt bogmærke, og indsæt koden som adresse.')}
   catch(e){toast('Kunne ikke kopiere koden.')}};
 

@@ -57,7 +57,7 @@ Appen kan læse to sider fra tidssystemet:
 - **Month Journal:** tider og saldo pr. dag. Systemets saldo bruges direkte.
 - **Abs. Calendar:** ferie, sygdom, flexfri og helligdage for hele året.
 
-Hurtigst er bogmærket: gå til Indstillinger → Hent fra tidssystemet, og træk knappen **Til Flexregnskab** op i favoritlinjen. Åbn siden i tidssystemet, klik på bogmærket, gå tilbage til appen og tryk Ctrl+V.
+Hurtigst er bogmærket: gå til Indstillinger → Hent fra InterFlex, og træk knappen **Til Flexregnskab** op i favoritlinjen. Åbn Month Journal i InterFlex, og klik på bogmærket. Det henter alle tilgængelige måneder på én gang. Ligger appen på en webadresse, åbner den af sig selv med data klar. Ellers klikker du Kopiér i panelet og trykker Ctrl+V i appen.
 
 Appen kan ikke selv læse andre faner, for browseren tillader det ikke af sikkerhedshensyn. Bogmærket kører inde i tidssystemets fane og kopierer siden. Virker bogmærket ikke, fordi IT har blokeret det, så gem siden med Ctrl+S og brug **Importer fil**.
 

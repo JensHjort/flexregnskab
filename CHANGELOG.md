@@ -1,5 +1,13 @@
 # Ændringer
 
+## 1.4.0 (2026-11-11)
+
+- Bogmærket henter alle måneder, InterFlex viser, på én gang fra Month Journal. Et panel viser fremskridtet, og InterFlex stilles tilbage bagefter.
+- Ligger appen på en webadresse, åbner bogmærket appen og sender data direkte uden Ctrl+V. Ellers er der en Kopiér-knap i panelet.
+- Flere måneder vises som én samlet import.
+- Bogmærket er skrevet, så det også virker i Edges Internet Explorer-tilstand.
+- Træk bogmærket op i favoritlinjen igen for at få den nye udgave.
+
 ## 1.3.1 (2026-11-11)
 
 - Google Drev vises altid under Indstillinger → Konto og lagring, også før det er sat op.
