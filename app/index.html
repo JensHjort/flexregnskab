@@ -292,7 +292,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.5.3';
+const APP_VERSION='1.6.0';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -985,9 +985,9 @@ function handleAbs(res,box,fname){
 function htmlText(s){const d=document.createElement('div');d.innerHTML=s.replace(/<(script|style)[\s\S]*?<\/\1>/gi,'');return d.textContent.replace(/ /g,' ').replace(/\s+/g,' ').trim()}
 function parseMonthJournal(html){
   const mm=/Journal for\s*(\d{1,2})\s*\/\s*(\d{4})/.exec(html);
-  if(!mm||!/iflxMojouPrt/.test(html))return null;
+  if(!mm||!/class="iflxMojou/.test(html))return null;
   const y=+mm[2],m=+mm[1]-1,days=[];let cur=null;
-  for(const row of html.matchAll(/<tr[^>]*>\s*((?:<td[^>]*class="iflxMojouPrt[\s\S]*?<\/td>\s*){9})<\/tr>/g)){
+  for(const row of html.matchAll(/<tr[^>]*>\s*((?:<td[^>]*class="iflxMojou[\s\S]*?<\/td>\s*){9})<\/tr>/g)){
     const c=[...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>htmlText(x[1]));
     const dm=/^[A-Za-zæøåÆØÅ]+\s*,\s*(\d{1,2})$/.exec(c[0]);
     if(dm){const d=+dm[1];if(d<1||d>daysIn(y,m)){cur=null;continue}
@@ -1040,7 +1040,7 @@ function handleJournal(res,box){
       ${last?`<div>Saldo i InterFlex ${+last.iso.slice(8)}. ${MONTHS[+last.iso.slice(5,7)-1]}: <b class="n">${fs(last.saldo)}</b> t. Den bruges direkte i appen.</div>`:''}
       ${ex?`<div class="note">${ex} dage har allerede tider i appen. De bliver erstattet af tidssystemets tider.</div>`:''}</div>
     ${ruleDiffers?`<label class="row" style="gap:8px;font-size:15px;align-items:flex-start"><input type="checkbox" id="jrnRule" checked style="width:auto;margin-top:4px">
-      <span>Brug tidssystemets pauseregel: ${rule.p} min ved over ${dnum(rule.from)} timer${rule.over9?`, også over 9 timer`:''}. Appen trækker i dag ${st.p6} min ved over ${dnum(pnum(st.pauseFrom)??6)} timer og ${st.p9} min over 9 timer.</span></label>`:''}
+      <span>Brug InterFlex' pauseregel: ${rule.p} min ved over ${dnum(rule.from)} timer${rule.over9?`, også over 9 timer`:''}. Appen trækker i dag ${st.p6} min ved over ${dnum(pnum(st.pauseFrom)??6)} timer og ${st.p9} min over 9 timer.</span></label>`:''}
     <div class="row"><button class="primary" id="jrnGo">Importer ${days.length} dage</button><button class="ghost" id="jrnCancel">Annuller</button></div></div>`;
   $('jrnCancel').onclick=()=>{jrnPending=null;box.innerHTML=''};
   $('jrnGo').onclick=()=>{
@@ -1081,7 +1081,7 @@ function receiveImport(payload){
 document.addEventListener('paste',e=>{
   const t=e.clipboardData&&e.clipboardData.getData('text');if(!t)return;
   if(t.startsWith(BM_MARK)){e.preventDefault();receiveImport(t);return}
-  if(/iflxMojouPrt|iflxAbsenceCalendar/.test(t)){e.preventDefault();receiveImport(BM_MARK+t)}
+  if(/class="iflxMojou|iflxAbsenceCalendar/.test(t)){e.preventDefault();receiveImport(BM_MARK+t)}
 });
 // Data sent straight from the bookmarklet (InterFlex tab opened this app). Nothing is saved before the user confirms.
 window.addEventListener('message',e=>{
@@ -1094,17 +1094,23 @@ if(window.opener)try{window.opener.postMessage({type:'flexregnskab-ready'},'*')}
 /* Bookmarklet. Runs inside the InterFlex tab (the only place allowed to read it). Written in old-style
    JavaScript so it also works if InterFlex runs in Internet Explorer mode. Serialised with toString(). */
 function flexBookmarklet(APP,MARK,SEP){
-  var D=document,pages=[],payload=null,appWin=null,appOrigin=null,sent=false;
-  function find(w){try{var d=w.document;if(d.forms.iflxDatePeriodFrm||/iflxMojouPrt|iflxAbsenceCalendar/.test(d.documentElement.innerHTML))return d;
-    for(var i=0;i<w.frames.length;i++){var r=find(w.frames[i]);if(r)return r}}catch(e){}return null}
-  var doc=find(window.top)||find(window);
-  if(!doc){alert('Flexregnskab: Åbn Month Journal eller Abs. Calendar i InterFlex, og klik så på bogmærket.');return}
-  if(doc.body&&doc.body.tagName==='BODY')D=doc;
+  var pages=[],payload=null,appWin=null,appOrigin=null,sent=false,jdoc=null,adoc=null,base=null,pdoc=null,pArea=-1;
+  var JRN=/class="iflxMojou/,CAL=/iflxAbsenceCalendar/,MON=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+  // Walk every frame we may read: find the journal, the absence calendar, InterFlex's folder and the biggest visible page for the panel.
+  function walk(w){try{var d=w.document,u=String(d.location.href),h=d.documentElement.innerHTML,mm=u.match(/^(https?:\/\/[^?#]*\/iflx\/[^\/]+\/)/);
+      if(mm&&!base)base=mm[1];
+      if(!jdoc&&d.forms&&d.forms.iflxDatePeriodFrm&&JRN.test(h))jdoc=d;
+      if(!adoc&&CAL.test(h)&&!JRN.test(h))adoc=d;
+      if(d.body&&d.body.tagName==='BODY'){var a=(w.innerWidth||0)*(w.innerHeight||0);if(a>pArea){pArea=a;pdoc=d}}
+      for(var i=0;i<w.frames.length;i++)walk(w.frames[i])}catch(e){}}
+  walk(window.top);if(!pdoc)walk(window);
+  if(!base&&!jdoc&&!adoc){alert('Flexregnskab: Åbn InterFlex WebClient (fx Month Journal), og klik så på bogmærket.');return}
+  var D=pdoc||document;
   if(APP&&/^https?:/.test(APP)){try{appOrigin=APP.match(/^https?:\/\/[^\/]+/)[0];appWin=window.open(APP+'#modtag','flexregnskab')}catch(e){appWin=null}}
   var old=D.getElementById('flxPanel');if(old)old.parentNode.removeChild(old);
   var p=D.createElement('div');p.id='flxPanel';
   p.style.cssText='position:fixed;z-index:2147483647;top:16px;right:16px;width:300px;background:#fff;color:#151a21;font:14px/1.45 Segoe UI,Arial,sans-serif;border:1px solid #dde1e7;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:14px 16px;text-align:left';
-  p.innerHTML='<div style="font-weight:700;margin-bottom:4px">Flexregnskab</div><div></div><div style="margin-top:10px"></div>';
+  p.innerHTML='<div style="font-weight:700;margin-bottom:4px">Flexregnskab</div><div>Starter…</div><div style="margin-top:10px"></div>';
   D.body.appendChild(p);var st=p.childNodes[1],bx=p.childNodes[2];
   function say(t){st.innerHTML=t}
   function btn(t,primary,fn){var b=D.createElement('button');b.innerHTML=t;b.onclick=fn;
@@ -1117,37 +1123,49 @@ function flexBookmarklet(APP,MARK,SEP){
     var ok=false;try{ok=D.execCommand('copy')}catch(e){}a.parentNode.removeChild(a);
     say(ok?'Kopieret. Gå til Flexregnskab og tryk <b>Ctrl+V</b>.':'Kunne ikke kopiere. Gem siden med Ctrl+S og importer filen i stedet.')}
   function finish(note){
+    var close=function(){p.parentNode.removeChild(p)};
+    if(!pages.length){say('Fandt ingen data. '+(note||'')+' Åbn Month Journal, og prøv igen.');btn('Luk',false,close);return}
     payload=MARK+pages.join(SEP);
     say(pages.length+(pages.length===1?' side':' sider')+' hentet'+(note?'. '+note:'.')+(appWin?' Sender til appen…':''));
-    btn('Kopiér',!appWin,copy);btn('Luk',false,function(){p.parentNode.removeChild(p)});
+    btn('Kopiér',!appWin,copy);btn('Luk',false,close);
     post();setTimeout(function(){if(appWin&&!sent)say(st.innerHTML.replace(' Sender til appen…','')+' Appen svarede ikke. Brug Kopiér og tryk Ctrl+V i appen.')},6000);
   }
-  var form=doc.forms.iflxDatePeriodFrm;
-  if(!form||!form._iflxDatePeriodFrm_daterangebegin){pages.push(doc.documentElement.outerHTML);finish('');return}
-  function v(n){return form[n]?form[n].value:''}
-  var b=v('_iflxDatePeriodFrm_daterangebegin'),e=v('_iflxDatePeriodFrm_daterangeend'),orig=v('_iflxDatePeriodFrm_begindate')||e;
-  var months=[],y=+b.substr(0,4),m=+b.substr(4,2),ey=+e.substr(0,4),em=+e.substr(4,2);
-  while(y<ey||(y===ey&&m<=em)){months.push(y+(m<10?'0':'')+m+'01');m++;if(m>12){m=1;y++}}
-  if(!months.length){pages.push(doc.documentElement.outerHTML);finish('');return}
-  var MON=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
-  function body(date){var s=[],els=form.elements;for(var i=0;i<els.length;i++){var el=els[i];if(!el.name)continue;
-      var val=el.name==='_iflxDatePeriodFrm_action'?'reloadSpecificPeriod':el.name==='_iflxDatePeriodFrm_reloaddate'?date:el.value;
-      s.push(encodeURIComponent(el.name)+'='+encodeURIComponent(val))}return s.join('&')}
-  function load(date,cb){var x=new XMLHttpRequest();x.open('POST',form.action,true);
-    x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+  // Without a web address (e.g. a saved page) we can only take what is on screen.
+  if(!base){if(jdoc)pages.push(jdoc.documentElement.outerHTML);if(adoc)pages.push(adoc.documentElement.outerHTML);finish('');return}
+  function req(method,url,data,cb){var x=new XMLHttpRequest();x.open(method,url,true);
+    if(data)x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
     try{x.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
-    x.onreadystatechange=function(){if(x.readyState!==4)return;
-      var t=x.status===200?x.responseText:'';
-      if(t&&t.indexOf('iflxMojouPrt')<0){var fr=t.match(/<i?frame[^>]+src=["']([^"']+)["']/i);
-        if(fr){var y2=new XMLHttpRequest();y2.open('GET',fr[1],true);try{y2.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
-          y2.onreadystatechange=function(){if(y2.readyState===4)cb(y2.status===200?y2.responseText:'')};y2.send();return}}
-      cb(t)};
-    x.send(body(date))}
-  var i=0,failed=0;
-  (function next(){
-    if(i>=months.length){load(orig,function(){});finish(failed?failed+' måned(er) kunne ikke hentes':'');return}
-    var d=months[i++];say('Henter '+MON[+d.substr(4,2)-1]+' '+d.substr(0,4)+'… ('+i+' af '+months.length+')');
-    load(d,function(t){if(t&&t.indexOf('iflxMojouPrt')>=0)pages.push(t);else failed++;next()})})();
+    x.onreadystatechange=function(){if(x.readyState===4)cb(x.status>=200&&x.status<400?x.responseText:'')};
+    try{x.send(data||null)}catch(er){cb('')}}
+  function abs(u){if(/^https?:/.test(u))return u;if(u.charAt(0)==='/')return base.match(/^https?:\/\/[^\/]+/)[0]+u;return base+u}
+  function fresh(u){return u+(u.indexOf('?')<0?'?':'&')+'_flx='+new Date().getTime()}
+  function formOf(d){var f=d&&d.forms&&d.forms.iflxDatePeriodFrm;if(!f)return null;var fl=[];
+    for(var i=0;i<f.elements.length;i++){var el=f.elements[i];if(el.name)fl.push([el.name,el.value])}
+    return{action:abs(f.getAttribute('action')||'/WebClient/servlet/com.iflx.web6020.servlets.iflxDatePeriodFrm'),fields:fl,
+      get:function(n){for(var i=0;i<fl.length;i++)if(fl[i][0]===n)return fl[i][1];return''}}}
+  function parse(t){try{return new DOMParser().parseFromString(t,'text/html')}catch(e){return null}}
+  function calendar(cb){if(adoc){pages.push(adoc.documentElement.outerHTML);cb();return}
+    say('Henter fraværskalenderen…');req('GET',fresh(base+'abscalendar.jsp'),null,function(t){if(t&&CAL.test(t))pages.push(t);cb()})}
+  function journalForm(cb){var F=formOf(jdoc);if(F&&F.get('_iflxDatePeriodFrm_daterangebegin')){cb(F);return}
+    say('Henter månedsjournalen…');req('GET',fresh(base+'mojoudata.jsp'),null,function(t){cb(t&&JRN.test(t)?formOf(parse(t)):null)})}
+  journalForm(function(F){
+    if(!F){calendar(function(){finish('Månedsjournalen kunne ikke hentes.')});return}
+    var b=F.get('_iflxDatePeriodFrm_daterangebegin'),e=F.get('_iflxDatePeriodFrm_daterangeend'),orig=F.get('_iflxDatePeriodFrm_begindate')||e;
+    var months=[],y=+b.substr(0,4),m=+b.substr(4,2),ey=+e.substr(0,4),em=+e.substr(4,2);
+    while(y<ey||(y===ey&&m<=em)){months.push(y+(m<10?'0':'')+m+'01');m++;if(m>12){m=1;y++}}
+    function body(date){var s=[];for(var i=0;i<F.fields.length;i++){var n=F.fields[i][0],v=F.fields[i][1];
+        if(n==='_iflxDatePeriodFrm_action')v='reloadSpecificPeriod';else if(n==='_iflxDatePeriodFrm_reloaddate')v=date;
+        s.push(encodeURIComponent(n)+'='+encodeURIComponent(v))}return s.join('&')}
+    function isMonth(t,date){var j=t&&t.match(/Journal for\s*(\d{1,2})\s*\/\s*(\d{4})/);return!!j&&+j[1]===+date.substr(4,2)&&+j[2]===+date.substr(0,4)}
+    // Change period on the server, then read the journal page itself (the reply may be a frameset).
+    function month(date,cb){req('POST',F.action,body(date),function(t){if(isMonth(t,date)&&JRN.test(t)){cb(t);return}
+      req('GET',fresh(base+'mojoudata.jsp'),null,function(t2){cb(isMonth(t2,date)&&JRN.test(t2)?t2:'')})})}
+    var i=0,failed=0;
+    (function next(){
+      if(i>=months.length){req('POST',F.action,body(orig),function(){calendar(function(){finish(failed?failed+' måned(er) kunne ikke hentes':'')})});return}
+      var d=months[i++];say('Henter '+MON[+d.substr(4,2)-1]+' '+d.substr(0,4)+'… ('+i+' af '+months.length+')');
+      month(d,function(t){if(t)pages.push(t);else failed++;next()})})();
+  });
 }
 function bookmarkletCode(){
   const app=location.protocol.startsWith('http')?location.origin+location.pathname:'';

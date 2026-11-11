@@ -1,5 +1,12 @@
 # Ændringer
 
+## 1.6.0 (2026-11-11)
+
+- Rettelse: månedsjournalen genkendes nu også i InterFlex' almindelige visning. Før virkede kun udskriftsvisningen.
+- Bogmærket virker fra enhver side i InterFlex WebClient, også forsiden. Det finder selv journalen gennem rammerne.
+- Efter hvert månedsskift læser bogmærket journalsiden direkte og tjekker, at det er den rigtige måned. InterFlex svarer med en rammeside, hvor første ramme er tom.
+- Bogmærket henter også fraværskalenderen for året, så journal og fravær kommer i én import.
+
 ## 1.5.3 (2026-11-11)
 
 - Tydeligere fejlbesked, når Google blokerer login, fordi appen stadig er i testtilstand.
