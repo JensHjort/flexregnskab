@@ -1,5 +1,11 @@
 # Ændringer
 
+## 1.6.2 (2026-11-11)
+
+- Udløbet Google-login vises øverst på alle sider. Er der ændringer, som ikke er gemt i Google Drev, siger beskeden det.
+- Appen tjekker hvert minut, om Google-adgangen er udløbet, også når appen bare står åben, og giver en kort besked.
+- "Hent fra InterFlex" er foldet sammen til én linje under Data.
+
 ## 1.6.1 (2026-11-11)
 
 - Rettelse: bogmærket hentede kun fraværsdage. Nu skifter det måned i en skjult ramme med InterFlex' egen formular, præcis som når man klikker, i stedet for baggrundsforespørgsler.

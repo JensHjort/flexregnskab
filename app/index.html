@@ -184,16 +184,18 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 </header>
 
 <main class="wrap">
-  <!-- UGE -->
-  <section class="view" id="v-uge">
+  <div id="banners" hidden style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
     <div class="card pad row spread" id="gBanner" hidden style="background:var(--accent-soft);border-color:var(--accent-soft)">
-      <span>Forbind til Google Drev for at hente og gemme dine seneste registreringer.</span>
+      <span id="gBannerText">Google-login er udløbet.</span>
       <button class="primary" onclick="GDrive.connect()">Forbind</button>
     </div>
     <div class="card pad row spread" id="fileBanner" hidden style="background:var(--accent-soft);border-color:var(--accent-soft)">
       <span>Forbind til <b id="fileBannerName"></b> for at hente dine seneste registreringer.</span>
       <button class="primary" onclick="FileSync.reconnect()">Forbind</button>
     </div>
+  </div>
+  <!-- UGE -->
+  <section class="view" id="v-uge">
     <div class="card stats" id="stats"></div>
     <div class="card todaybar" id="todaybar"></div>
     <div class="card">
@@ -250,16 +252,6 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       </div>
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
     </div>
-    <div class="card pad" id="ifxCard" style="display:flex;flex-direction:column;gap:14px">
-      <h2>Hent fra InterFlex</h2>
-      <ol class="note" style="padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px">
-        <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang, og igen hvis appen flytter til en ny adresse.
-          <div class="row" style="margin-top:8px"><a class="btn primary" id="bmLink" href="#" title="Træk mig op i favoritlinjen">⤓ Til Flexregnskab</a><button class="ghost" id="bmCopy">Kopiér koden i stedet</button></div></li>
-        <li>Åbn <b>Month Journal</b> i InterFlex, og klik på bogmærket. Det henter <b>alle de måneder, InterFlex viser</b>, på én gang.</li>
-        <li id="bmStep3">Appen åbner af sig selv med data klar. Du ser, hvad der importeres, og trykker Importer.</li>
-      </ol>
-      <p class="note">Fravær for hele året: åbn <b>Abs. Calendar</b>, og klik på bogmærket. Virker bogmærket ikke, så gem siden med Ctrl+S og vælg den med <b>Importer fil</b> herunder.</p>
-    </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:16px">
       <h2>Data</h2>
       <div class="row">
@@ -272,6 +264,18 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       </div>
       <div id="restoreBox"></div>
       <div id="xlsBox"></div>
+      <details id="ifxCard">
+        <summary>Hent fra InterFlex</summary>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
+      <ol class="note" style="padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px">
+        <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang, og igen hvis appen flytter til en ny adresse.
+          <div class="row" style="margin-top:8px"><a class="btn primary" id="bmLink" href="#" title="Træk mig op i favoritlinjen">⤓ Til Flexregnskab</a><button class="ghost" id="bmCopy">Kopiér koden i stedet</button></div></li>
+        <li>Åbn <b>Month Journal</b> i InterFlex, og klik på bogmærket. Det henter <b>alle de måneder, InterFlex viser</b>, på én gang.</li>
+        <li id="bmStep3">Appen åbner af sig selv med data klar. Du ser, hvad der importeres, og trykker Importer.</li>
+      </ol>
+      <p class="note">Fravær for hele året: åbn <b>Abs. Calendar</b>, og klik på bogmærket. Virker bogmærket ikke, så gem siden med Ctrl+S og vælg den med <b>Importer fil</b> herunder.</p>
+        </div>
+      </details>
       <details>
         <summary>Sådan regnes der</summary>
         <ul class="note" style="padding-left:18px;margin-top:10px;display:flex;flex-direction:column;gap:4px">
@@ -292,7 +296,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.6.1';
+const APP_VERSION='1.6.2';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -497,7 +501,8 @@ const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',las
     }catch(e){if(this.state!=='needauth')this.set(navigator.onLine?'error':'offline',e)}
     this.busy=false;
   },
-  set(s,e){this.state=s;if(e)this.err=e.message||String(e);renderSync()}
+  set(s,e){const was=this.state;this.state=s;if(e)this.err=e.message||String(e);renderSync();
+    if(s==='needauth'&&was!=='needauth'&&was!=='off')toast('Google-login er udløbet. Tryk Forbind øverst for at gemme i Google Drev.')}
 };
 function renderGoogle(){
   const g=GDrive,line={ok:`Gemt i Google Drev kl. ${g.last?clock(g.last):''}`,busy:'Synkroniserer med Google Drev…',pending:'Gemmer i Google Drev…',
@@ -542,6 +547,8 @@ function renderSync(){
   $('fileBanner').hidden=F.state!=='needperm';
   $('fileBannerName').textContent=fname;
   $('gBanner').hidden=!(G&&GDrive.linked&&GDrive.state==='needauth');
+  $('gBannerText').innerHTML=GDrive.pending?'<b>Google-login er udløbet.</b> Dine seneste ændringer er kun gemt på denne enhed, indtil du forbinder igen.':'<b>Google-login er udløbet.</b> Forbind igen for at hente og gemme i Google Drev.';
+  $('banners').hidden=$('gBanner').hidden&&$('fileBanner').hidden;
   let fb;
   if(!F.supported)fb=`<p class="note">En datafil i OneDrive kræver Chrome eller Edge på en computer. Her gemmes dine data i browseren.</p>`;
   else if(!F.handle)fb=`<p class="note">Gem dine registreringer i en fil i din OneDrive-mappe på computeren. OneDrive tager sig af resten, og filen kan også åbnes i Excel. Læg filen i samme mappe som appen.</p>
@@ -1254,6 +1261,8 @@ $('restoreFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';
   }catch(_){$('restoreBox').innerHTML='<p class="note neg">Filen er ikke en backup fra Flexregnskab.</p>'}};
 $('xlsFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)handleXls(f)};
 setInterval(()=>{if(CALC)renderToday()},60000);
+// Notice an expired Google login while the app stays open.
+setInterval(()=>{if(GDrive.linked&&GDrive.state!=='needauth'&&!GDrive.valid())GDrive.set('needauth')},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CALC)renderAll()});
 
 $('appVersion').textContent='Flexregnskab version '+APP_VERSION;
