@@ -1,5 +1,9 @@
 # Ændringer
 
+## 1.5.1 (2026-11-11)
+
+- Knappen "Log ind med Google" vises altid under Indstillinger. Er Google-login ikke sat op endnu, åbner den opsætningen med feltet til klient-ID.
+
 ## 1.5.0 (2026-11-11)
 
 Mobilvisningen er gennemgået:

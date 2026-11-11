@@ -292,7 +292,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.5.1';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -506,10 +506,15 @@ function renderGoogle(){
   let b=`<h3 class="label sub">Google Drev</h3>`;
   if(!g.enabled()){
     const uri=g.redirectUri(),local=!location.protocol.startsWith('http');
-    b+=`<p class="note">Gem dine registreringer i dit personlige Google Drev, og brug appen på både telefon og computer. Det kræver et gratis klient-ID fra Google, som du selv opretter (trin i README).</p>
+    b+=`<p class="note">Gem dine registreringer i dit personlige Google Drev, og brug appen på både telefon og computer.</p>
+      <div class="row"><button class="primary" id="gSetup">Log ind med Google</button></div>
+      <details id="gSetupBox"><summary>Opsætning (kun første gang)</summary>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <p class="note">Google-login kræver et gratis klient-ID, som ejeren af appen opretter én gang på console.cloud.google.com (trin i README). Indsæt det her.</p>
       ${local?`<p class="note neg">Appen er åbnet som en fil på computeren. Google-login kræver, at appen ligger på en https-adresse, fx GitHub Pages.</p>`:
       `<p class="note">Adressen, du skal skrive ind hos Google som "Authorized redirect URI": <span class="n" style="user-select:all;word-break:break-all">${esc(uri)}</span></p>`}
-      <div class="row"><input id="gClientIn" placeholder="1234567890-abc.apps.googleusercontent.com" style="flex:1;min-width:min(100%,260px)" class="n"><button id="gClientSave">Gem klient-ID</button></div>`;
+      <div class="row"><input id="gClientIn" placeholder="1234567890-abc.apps.googleusercontent.com" style="flex:1;min-width:min(100%,260px)" class="n"><button id="gClientSave">Gem klient-ID</button></div>
+      </div></details>`;
     return{b,line:'',dot:''};
   }
   if(!g.linked)b+=`<p class="note">Log ind med din Google-konto, så gemmes dine registreringer i filen ${GFILE} i dit Google Drev og følger dig mellem telefon og computer. Appen kan kun se de filer, den selv har lavet.</p>
@@ -556,6 +561,7 @@ function renderSync(){
 function bindSync(){
   const c=Cloud,F=FileSync,on=(id,fn)=>{const b=$(id);if(b)b.onclick=fn};
   on('loginBtn',()=>c.login());on('logoutBtn',()=>c.logout());on('syncBtn',()=>c.pull());
+  on('gSetup',()=>{$('gSetupBox').open=true;toast('Google-login er ikke sat op endnu. Indsæt klient-ID\'et først.');setTimeout(()=>$('gClientIn').focus(),50)});
   on('gClientSave',()=>{const v=$('gClientIn').value.trim();
     if(!/^[\w-]+\.apps\.googleusercontent\.com$/.test(v)){toast('Det ligner ikke et Google-klient-ID. Det slutter på .apps.googleusercontent.com.');return}
     try{localStorage.setItem('flexregnskab-gclient',v)}catch(e){}GDrive.load();GDrive.set('out');toast('Klient-ID gemt. Tryk Log ind med Google.')});
