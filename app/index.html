@@ -256,7 +256,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.1';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -375,16 +375,28 @@ const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',las
     const h=location.hash.slice(1);if(!/(^|&)state=/.test(h))return;
     const p=new URLSearchParams(h),want=sessionStorage.getItem('flex-gstate'),tried=sessionStorage.getItem('flex-gprompt');
     if(!want||p.get('state')!==want)return;
-    history.replaceState(null,'',location.pathname+'#indstillinger');sessionStorage.removeItem('flex-gstate');
-    if(p.get('access_token')){this.token=p.get('access_token');this.exp=Date.now()+(+p.get('expires_in')||3600)*1000;this.linked=true;this.save();this.justLinked=true;return}
-    const err=p.get('error')||'ukendt fejl';
-    if(tried==='none'&&/interaction_required|consent_required|login_required|account_selection_required/.test(err)){this.redirectNow('consent');return}
+    const back=sessionStorage.getItem('flex-greturn')||'#indstillinger',auto=sessionStorage.getItem('flex-gauto')==='1';
+    history.replaceState(null,'',location.pathname+back);['flex-gstate','flex-greturn','flex-gauto'].forEach(k=>sessionStorage.removeItem(k));
+    if(p.get('access_token')){this.token=p.get('access_token');this.exp=Date.now()+(+p.get('expires_in')||3600)*1000;
+      if(!auto)this.justLinked=!this.linked;this.linked=true;this.save();return}
+    const err=p.get('error')||'ukendt fejl',needsUser=/interaction_required|consent_required|login_required|account_selection_required/.test(err);
+    if(auto&&needsUser){this.state='needauth';return}            // silent renewal failed: show the button, never loop
+    if(tried==='none'&&needsUser){this.redirectNow('consent');return}
     this.err=err==='access_denied'?'Du afviste adgangen til Google Drev.':'Google-login fejlede: '+err;this.state='error';
   },
   connect(){this.redirectNow(this.linked?'none':'consent')},
-  redirectNow(prompt){
+  // Fetch a new token without asking, at most every 10 minutes, and never when data from the bookmarklet is on its way.
+  autoRenew(){
+    let lastTry=0;try{lastTry=+localStorage.getItem('flexregnskab-gauto-at')||0}catch(e){}
+    if(!navigator.onLine||window.opener||/modtag/.test(location.hash)||Date.now()-lastTry<600000)return false;
+    try{localStorage.setItem('flexregnskab-gauto-at',String(Date.now()))}catch(e){}
+    this.redirectNow('none',true);return true;
+  },
+  redirectNow(prompt,auto){
     const state=Math.random().toString(36).slice(2)+Date.now().toString(36);
     sessionStorage.setItem('flex-gstate',state);sessionStorage.setItem('flex-gprompt',prompt);
+    sessionStorage.setItem('flex-gauto',auto?'1':'0');
+    sessionStorage.setItem('flex-greturn',auto||this.linked?(VIEWS.includes(location.hash.slice(1))?location.hash:'#uge'):'#indstillinger');
     const q=new URLSearchParams({client_id:this.clientId(),redirect_uri:this.redirectUri(),response_type:'token',scope:GSCOPE,include_granted_scopes:'true',state,prompt:prompt==='consent'?'consent select_account':'none'});
     if(this.email)q.set('login_hint',this.email);
     location.href='https://accounts.google.com/o/oauth2/v2/auth?'+q;
@@ -392,7 +404,7 @@ const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',las
   async init(){
     if(!this.enabled())return;
     if(!this.linked){if(this.state!=='error')this.set('out');else renderSync();return}
-    if(!this.valid()){this.set('needauth');return}
+    if(!this.valid()){if(this.state==='needauth'||!this.autoRenew())this.set('needauth');return}
     if(!this.email){try{const u=await (await this.api('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)')).json();this.email=(u.user&&u.user.emailAddress)||'';this.save()}catch(e){}}
     await this.pull();
     if(this.justLinked){this.justLinked=false;toast('Forbundet til Google Drev.')}
@@ -465,7 +477,7 @@ function renderGoogle(){
     return{b,line:'',dot:''};
   }
   if(!g.linked)b+=`<p class="note">Log ind med din Google-konto, så gemmes dine registreringer i filen ${GFILE} i dit Google Drev og følger dig mellem telefon og computer. Appen kan kun se de filer, den selv har lavet.</p>
-    <div class="row"><button class="primary" id="gLogin">Forbind Google Drev</button></div>${g.state==='error'?`<p class="note neg">${esc(g.err)}</p>`:''}`;
+    <div class="row"><button class="primary" id="gLogin">Log ind med Google</button></div>${g.state==='error'?`<p class="note neg">${esc(g.err)}</p>`:''}`;
   else b+=`<div class="row spread"><div><div><b>${esc(g.email||'Google Drev')}</b></div><div class="note"><span class="dot ${dot}"></span>${esc(line)}</div></div>
     <div class="row">${g.state==='needauth'?'<button class="primary" id="gLogin">Forbind</button>':'<button id="gSync">Synkroniser nu</button>'}<button class="ghost" id="gOff">Afbryd</button></div></div>
     ${g.state==='error'?`<p class="note neg">${esc(g.err)}</p>`:''}`;
@@ -510,7 +522,7 @@ function bindSync(){
   on('loginBtn',()=>c.login());on('logoutBtn',()=>c.logout());on('syncBtn',()=>c.pull());
   on('gClientSave',()=>{const v=$('gClientIn').value.trim();
     if(!/^[\w-]+\.apps\.googleusercontent\.com$/.test(v)){toast('Det ligner ikke et Google-klient-ID. Det slutter på .apps.googleusercontent.com.');return}
-    try{localStorage.setItem('flexregnskab-gclient',v)}catch(e){}GDrive.load();GDrive.set('out');toast('Klient-ID gemt. Tryk Forbind Google Drev.')});
+    try{localStorage.setItem('flexregnskab-gclient',v)}catch(e){}GDrive.load();GDrive.set('out');toast('Klient-ID gemt. Tryk Log ind med Google.')});
   on('gClientClear',()=>{try{localStorage.removeItem('flexregnskab-gclient')}catch(e){}GDrive.set('off')});
   on('gLogin',()=>GDrive.connect());on('gSync',()=>GDrive.pull());on('gOff',()=>GDrive.disconnect());
   on('fNew',()=>F.create());on('fPick',()=>F.choose());on('fPerm',()=>F.reconnect());on('fRead',()=>F.read(true));on('fOff',()=>F.disconnect());

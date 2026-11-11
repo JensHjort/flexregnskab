@@ -47,7 +47,7 @@ Det kræver to ting:
 
 **På telefonen:** åbn adressen, gå til Indstillinger → **Forbind Google Drev**, og læg appen på hjemmeskærmen (iPhone: Safari → Del → Føj til hjemmeskærm; Android: Chrome → Installer app).
 
-Google giver adgang i én time ad gangen. Åbner du appen senere, viser forsiden **Forbind**. Ét tryk, og du er tilbage, oftest uden at skulle logge ind igen. Ændringer, du laver i mellemtiden, gemmes på telefonen og sendes, når du har trykket Forbind.
+Google giver adgang i én time ad gangen. Åbner du appen senere, henter den selv en ny adgang. Du ser Googles side et øjeblik, og så er du tilbage. Kun hvis det ikke lykkes, fx fordi du er logget ud af Google, viser forsiden **Forbind**. Ændringer, du laver i mellemtiden, gemmes på telefonen og sendes, når du har trykket Forbind.
 
 Tænk over, om din arbejdsgiver har regler for at gemme arbejdsrelaterede data (navn, tider, fravær) på en privat Google-konto.
 

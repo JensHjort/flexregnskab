@@ -1,5 +1,11 @@
 # Ændringer
 
+## 1.4.1 (2026-11-11)
+
+- Google Drev: knappen hedder nu "Log ind med Google".
+- Når Googles adgang er udløbet, henter appen selv en ny ved opstart uden at spørge. Knappen "Forbind" vises kun, hvis det ikke lykkes. Højst ét forsøg hvert 10. minut, og aldrig når data fra bogmærket er på vej.
+- Efter en automatisk fornyelse kommer man tilbage til den visning, man var i.
+
 ## 1.4.0 (2026-11-11)
 
 - Bogmærket henter alle måneder, InterFlex viser, på én gang fra Month Journal. Et panel viser fremskridtet, og InterFlex stilles tilbage bagefter.
