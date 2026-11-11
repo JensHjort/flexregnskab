@@ -1,5 +1,14 @@
 # Ændringer
 
+## 1.3.0 (2026-11-11)
+
+- Synkronisering med personligt Google Drev (filen `Flexregnskab.json`), så appen også kan bruges på mobilen.
+  - Login med redirect, så det også virker i appen installeret på hjemmeskærmen.
+  - Appen får kun adgang til egne filer (`drive.file`).
+  - Henter ved åbning og når appen kommer i forgrunden, og gemmer 1,5 sek. efter hver ændring.
+  - Når Googles adgang (1 time) er udløbet, viser forsiden en "Forbind"-knap. Ændringer gemmes lokalt imens.
+- Slås til med `googleClientId` i `config.js` (se README).
+
 ## 1.2.0 (2026-11-10)
 
 - Import af "Month Journal" fra tidssystemet: tider, delte skift, fravær en del af dagen og systemets saldo pr. dag.

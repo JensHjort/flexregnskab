@@ -151,6 +151,10 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <main class="wrap">
   <!-- UGE -->
   <section class="view" id="v-uge">
+    <div class="card pad row spread" id="gBanner" hidden style="background:var(--accent-soft);border-color:var(--accent-soft)">
+      <span>Forbind til Google Drev for at hente og gemme dine seneste registreringer.</span>
+      <button class="primary" onclick="GDrive.connect()">Forbind</button>
+    </div>
     <div class="card pad row spread" id="fileBanner" hidden style="background:var(--accent-soft);border-color:var(--accent-soft)">
       <span>Forbind til <b id="fileBannerName"></b> for at hente dine seneste registreringer.</span>
       <button class="primary" onclick="FileSync.reconnect()">Forbind</button>
@@ -252,8 +256,8 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.2.0';
-const CFG=Object.assign({msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
+const APP_VERSION='1.3.0';
+const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const SCOPES=['User.Read','Files.ReadWrite'];
@@ -299,7 +303,7 @@ const Store={
   snapshot(){return{app:'flexregnskab',v:3,updatedAt:S.updatedAt,settings:S.settings,months:S.months}},
   persist(touch=true){if(touch)S.updatedAt=Date.now();
     try{localStorage.setItem(LS,JSON.stringify(this.snapshot()))}catch(e){toast('Kunne ikke gemme på enheden.')}
-    if(touch){Cloud.schedule();FileSync.schedule();}},
+    if(touch){Cloud.schedule();FileSync.schedule();GDrive.schedule();}},
   apply(d){S.settings=normSettings(d.settings);S.months=d.months||{};S.updatedAt=d.updatedAt||Date.now();rebuildRows();this.persist(false);renderAll()},
   saveSettings(o){S.settings={...o};this.persist();renderAll();return Promise.resolve()},
   saveMonth(key,rows){if(!rows||!Object.keys(rows).length)delete S.months[key];else S.months[key]=rows;rebuildRows();this.persist();renderAll();return Promise.resolve()}
@@ -355,6 +359,109 @@ const Cloud={app:null,account:null,state:'off',last:null,timer:null,busy:false,p
   },
   set(s,e){this.state=s;if(e)this.err=e.message||String(e);renderSync()}
 };
+
+/* ---------- Google Drive: personal account, OAuth redirect (works in installed phone apps), scope drive.file ---------- */
+const GSCOPE='https://www.googleapis.com/auth/drive.file',GFILE='Flexregnskab.json',GKEY='flexregnskab-gdrive';
+const GDrive={token:null,exp:0,fileId:null,email:'',linked:false,state:'off',last:null,timer:null,busy:false,pending:false,err:'',
+  enabled(){return !!CFG.googleClientId},
+  load(){try{Object.assign(this,JSON.parse(localStorage.getItem(GKEY)||'{}'))}catch(e){}},
+  save(){try{localStorage.setItem(GKEY,JSON.stringify({token:this.token,exp:this.exp,fileId:this.fileId,email:this.email,linked:this.linked}))}catch(e){}},
+  valid(){return !!this.token&&Date.now()<this.exp-60000},
+  redirectUri(){return location.origin+location.pathname},
+  // Called first on page load: picks up the token Google sends back in the URL fragment.
+  handleRedirect(){
+    if(!this.enabled())return;this.load();
+    const h=location.hash.slice(1);if(!/(^|&)state=/.test(h))return;
+    const p=new URLSearchParams(h),want=sessionStorage.getItem('flex-gstate'),tried=sessionStorage.getItem('flex-gprompt');
+    if(!want||p.get('state')!==want)return;
+    history.replaceState(null,'',location.pathname+'#indstillinger');sessionStorage.removeItem('flex-gstate');
+    if(p.get('access_token')){this.token=p.get('access_token');this.exp=Date.now()+(+p.get('expires_in')||3600)*1000;this.linked=true;this.save();this.justLinked=true;return}
+    const err=p.get('error')||'ukendt fejl';
+    if(tried==='none'&&/interaction_required|consent_required|login_required|account_selection_required/.test(err)){this.redirectNow('consent');return}
+    this.err=err==='access_denied'?'Du afviste adgangen til Google Drev.':'Google-login fejlede: '+err;this.state='error';
+  },
+  connect(){this.redirectNow(this.linked?'none':'consent')},
+  redirectNow(prompt){
+    const state=Math.random().toString(36).slice(2)+Date.now().toString(36);
+    sessionStorage.setItem('flex-gstate',state);sessionStorage.setItem('flex-gprompt',prompt);
+    const q=new URLSearchParams({client_id:CFG.googleClientId,redirect_uri:this.redirectUri(),response_type:'token',scope:GSCOPE,include_granted_scopes:'true',state,prompt:prompt==='consent'?'consent select_account':'none'});
+    if(this.email)q.set('login_hint',this.email);
+    location.href='https://accounts.google.com/o/oauth2/v2/auth?'+q;
+  },
+  async init(){
+    if(!this.enabled())return;
+    if(!this.linked){if(this.state!=='error')this.set('out');else renderSync();return}
+    if(!this.valid()){this.set('needauth');return}
+    if(!this.email){try{const u=await (await this.api('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)')).json();this.email=(u.user&&u.user.emailAddress)||'';this.save()}catch(e){}}
+    await this.pull();
+    if(this.justLinked){this.justLinked=false;toast('Forbundet til Google Drev.')}
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&this.linked)this.valid()?this.pull():this.set('needauth')});
+    window.addEventListener('online',()=>{this.pending?this.push():this.pull()});
+  },
+  disconnect(){
+    if(this.token)fetch('https://oauth2.googleapis.com/revoke?token='+encodeURIComponent(this.token),{method:'POST'}).catch(()=>{});
+    Object.assign(this,{token:null,exp:0,fileId:null,email:'',linked:false});this.save();this.set('out');toast('Google Drev er afbrudt. Filen ligger stadig i dit Drev.');
+  },
+  async api(url,opt={}){
+    if(!this.valid()){this.set('needauth');throw new Error('Login udløbet')}
+    const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+this.token}});
+    if(r.status===401){this.token=null;this.save();this.set('needauth');throw new Error('Login udløbet')}
+    return r;
+  },
+  async findFile(){
+    if(this.fileId)return this.fileId;
+    const q=encodeURIComponent(`name='${GFILE}' and trashed=false`);
+    const r=await (await this.api(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)`)).json();
+    this.fileId=r.files&&r.files[0]?r.files[0].id:null;this.save();return this.fileId;
+  },
+  async pull(){
+    if(!this.linked||this.busy)return;if(!this.valid()){this.set('needauth');return}
+    this.busy=true;this.set('busy');
+    try{
+      const id=await this.findFile();
+      if(!id){this.busy=false;return this.push()}
+      const res=await this.api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`);
+      if(res.status===404){this.fileId=null;this.save();this.busy=false;return this.push()}
+      if(!res.ok)throw new Error('Google Drev svarede '+res.status);
+      const d=await res.json(),remote=(d&&d.app==='flexregnskab'&&d.updatedAt)||0;
+      if(remote>(S.updatedAt||0))Store.apply(d);
+      else if((S.updatedAt||0)>remote){this.busy=false;return this.push()}
+      this.pending=false;this.last=Date.now();this.set('ok');
+    }catch(e){if(this.state!=='needauth')this.set(navigator.onLine?'error':'offline',e)}
+    this.busy=false;
+  },
+  schedule(){if(!this.linked)return;this.pending=true;if(!this.valid()){this.set('needauth');return}
+    this.set('pending');clearTimeout(this.timer);this.timer=setTimeout(()=>this.push(),1500)},
+  async push(){
+    if(!this.linked)return;if(this.busy){this.schedule();return}if(!this.valid()){this.set('needauth');return}
+    this.busy=true;this.set('busy');
+    try{
+      const body=JSON.stringify(Store.snapshot());let id=await this.findFile(),res=null;
+      if(id){res=await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body});
+        if(res.status===404){this.fileId=null;id=null}}
+      if(!id){const b='flexregnskab'+Date.now();
+        const mp=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name:GFILE,mimeType:'application/json'})}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
+        res=await this.api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body:mp});
+        if(res.ok){this.fileId=(await res.clone().json()).id;this.save()}}
+      if(!res.ok)throw new Error('Google Drev svarede '+res.status);
+      this.pending=false;this.last=Date.now();this.set('ok');
+    }catch(e){if(this.state!=='needauth')this.set(navigator.onLine?'error':'offline',e)}
+    this.busy=false;
+  },
+  set(s,e){this.state=s;if(e)this.err=e.message||String(e);renderSync()}
+};
+function renderGoogle(){
+  const g=GDrive,line={ok:`Gemt i Google Drev kl. ${g.last?clock(g.last):''}`,busy:'Synkroniserer med Google Drev…',pending:'Gemmer i Google Drev…',
+    needauth:'Tryk Forbind for at synkronisere med Google Drev',offline:'Offline · sendes til Google Drev når du er online',error:'Kunne ikke nå Google Drev · gemt på enheden'}[g.state]||'';
+  const dot={ok:'ok',busy:'busy',pending:'busy',error:'err'}[g.state]||'';
+  let b=`<h3 class="label" style="margin:8px 0 0">Google Drev</h3>`;
+  if(!g.linked)b+=`<p class="note">Log ind med din Google-konto, så gemmes dine registreringer i filen ${GFILE} i dit Google Drev og følger dig mellem telefon og computer. Appen kan kun se de filer, den selv har lavet.</p>
+    <div class="row"><button class="primary" id="gLogin">Forbind Google Drev</button></div>${g.state==='error'?`<p class="note neg">${esc(g.err)}</p>`:''}`;
+  else b+=`<div class="row spread"><div><div><b>${esc(g.email||'Google Drev')}</b></div><div class="note"><span class="dot ${dot}"></span>${esc(line)}</div></div>
+    <div class="row">${g.state==='needauth'?'<button class="primary" id="gLogin">Forbind</button>':'<button id="gSync">Synkroniser nu</button>'}<button class="ghost" id="gOff">Afbryd</button></div></div>
+    ${g.state==='error'?`<p class="note neg">${esc(g.err)}</p>`:''}`;
+  return{b,line,dot};
+}
 function renderSync(){
   const c=Cloud,who=c.account?(c.account.name||c.account.username):'';
   const line={off:'Gemt på denne enhed',out:'Gemt på denne enhed · log ind under Indstillinger for at gemme i OneDrive',
@@ -365,10 +472,13 @@ function renderSync(){
   const F=FileSync,fname=F.handle?F.handle.name:'';
   const fline={ok:`Gemt i ${fname} kl. ${F.last?clock(F.last):''}`,busy:`Gemmer i ${fname}…`,needperm:`Ikke forbundet til ${fname} endnu`,error:`Kunne ikke bruge ${fname}`}[F.state];
   const fdot={ok:'ok',busy:'busy',error:'err'}[F.state]||'';
+  const G=GDrive.enabled()?renderGoogle():null;
   if(fline)$('mode').innerHTML=`<span class="dot ${fdot}"></span>${esc(fline)}`;
+  else if(G&&GDrive.linked)$('mode').innerHTML=`<span class="dot ${G.dot}"></span>${esc(G.line)}`;
   else $('mode').innerHTML=`<span class="dot ${dot}"></span>${esc(c.enabled()?line:'Gemt i denne browser')}`;
   $('fileBanner').hidden=F.state!=='needperm';
   $('fileBannerName').textContent=fname;
+  $('gBanner').hidden=!(G&&GDrive.linked&&GDrive.state==='needauth');
   let fb;
   if(!F.supported)fb=`<p class="note">En datafil i OneDrive kræver Chrome eller Edge på en computer. Her gemmes dine data i browseren.</p>`;
   else if(!F.handle)fb=`<p class="note">Gem dine registreringer i en fil i din OneDrive-mappe på computeren. OneDrive tager sig af resten, og filen kan også åbnes i Excel. Læg filen i samme mappe som appen.</p>
@@ -377,6 +487,7 @@ function renderSync(){
     <div class="row">${F.state==='needperm'?'<button class="primary" id="fPerm">Forbind</button>':'<button id="fRead">Hent nu</button>'}<button class="ghost" id="fPick">Skift fil</button><button class="ghost" id="fOff">Afbryd</button></div></div>
     ${F.state==='error'?`<p class="note neg">${esc(F.err)}</p>`:''}`;
   let body=`<h3 class="label" style="margin:0">Datafil i OneDrive</h3>${fb}`;
+  if(G)body+=G.b;
   if(!c.enabled()){$('syncBody').innerHTML=body;bindSync();return}
   body+=`<h3 class="label" style="margin:8px 0 0">Microsoft-login</h3>`;
   if(!c.account)body+=`<p class="note">Log ind med din arbejdskonto, så gemmes dine registreringer i din egen OneDrive og følger dig mellem telefon og computer. Kun du kan se dem.</p><div class="row"><button class="primary" id="loginBtn">Log ind med Microsoft</button></div>${c.state==='error'?`<p class="note neg">${esc(c.err)}</p>`:''}`;
@@ -387,6 +498,7 @@ function renderSync(){
 function bindSync(){
   const c=Cloud,F=FileSync,on=(id,fn)=>{const b=$(id);if(b)b.onclick=fn};
   on('loginBtn',()=>c.login());on('logoutBtn',()=>c.logout());on('syncBtn',()=>c.pull());
+  on('gLogin',()=>GDrive.connect());on('gSync',()=>GDrive.pull());on('gOff',()=>GDrive.disconnect());
   on('fNew',()=>F.create());on('fPick',()=>F.choose());on('fPerm',()=>F.reconnect());on('fRead',()=>F.read(true));on('fOff',()=>F.disconnect());
 }
 
@@ -969,7 +1081,8 @@ setInterval(()=>{if(CALC)renderToday()},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CALC)renderAll()});
 
 $('appVersion').textContent='Flexregnskab version '+APP_VERSION;
-Store.load();compute();buildWeek();refreshWeek();fillSettings();route();renderSync();FileSync.init();Cloud.init();
+GDrive.handleRedirect();
+Store.load();compute();buildWeek();refreshWeek();fillSettings();route();renderSync();FileSync.init();Cloud.init();GDrive.init();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>

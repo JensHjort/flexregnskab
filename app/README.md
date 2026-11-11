@@ -26,6 +26,31 @@ Derefter gemmes hver ændring i `flexregnskab.csv`, og OneDrive synkroniserer fi
 - `flexregnskab.csv` kan åbnes i Excel. Gem den som CSV (semikolon-separeret) igen, hvis du retter i den.
 - Virker ikke på telefon. Telefonens browser kan ikke skrive til en fil i OneDrive. Til telefon skal appen på en webadresse med Microsoft-login (se nedenfor).
 
+## Google Drev og mobil-app (personlig Google-konto)
+
+Med Google Drev gemmes dine data i filen `Flexregnskab.json` i dit eget Google Drev, og appen kan bruges på telefon og computer. Appen kan kun se filer, den selv har oprettet.
+
+Det kræver to ting:
+
+**A. Appen skal ligge på en HTTPS-adresse**, fx GitHub Pages: `https://<dit-brugernavn>.github.io/flexregnskab/`.
+
+**B. Et gratis OAuth-klient-ID fra Google** (ca. 10 minutter):
+1. Gå til https://console.cloud.google.com og opret et projekt, fx "Flexregnskab".
+2. **APIs & Services → Library**: søg efter **Google Drive API**, og klik **Enable**.
+3. **Google Auth Platform → Branding** (eller "OAuth consent screen"): User type **External**, appnavn "Flexregnskab", din e-mail som kontakt.
+4. **Data Access → Add or remove scopes**: tilføj `.../auth/drive.file`.
+5. **Audience**: tryk **Publish app** (In production). Ellers skal du godkende appen igen hver 7. dag. Med kun `drive.file` kræver det ingen godkendelse fra Google. Ser du "Google har ikke bekræftet denne app" første gang, så vælg Avanceret → Fortsæt, for appen er din egen.
+6. **Clients → Create client**: type **Web application**.
+   - Authorized JavaScript origins: `https://<dit-brugernavn>.github.io`
+   - Authorized redirect URIs: appens fulde adresse, fx `https://<dit-brugernavn>.github.io/flexregnskab/` (præcis som du åbner den, med `/` til sidst). Til test kan du tilføje `http://localhost:8000/`.
+7. Kopiér **Client ID** ind i `googleClientId` i `config.js`.
+
+**På telefonen:** åbn adressen, gå til Indstillinger → **Forbind Google Drev**, og læg appen på hjemmeskærmen (iPhone: Safari → Del → Føj til hjemmeskærm; Android: Chrome → Installer app).
+
+Google giver adgang i én time ad gangen. Åbner du appen senere, viser forsiden **Forbind**. Ét tryk, og du er tilbage, oftest uden at skulle logge ind igen. Ændringer, du laver i mellemtiden, gemmes på telefonen og sendes, når du har trykket Forbind.
+
+Tænk over, om din arbejdsgiver har regler for at gemme arbejdsrelaterede data (navn, tider, fravær) på en privat Google-konto.
+
 ## Hent data fra tidssystemet
 
 Appen kan læse to sider fra tidssystemet:
