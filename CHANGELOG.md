@@ -1,5 +1,13 @@
 # Ændringer
 
+## 1.6.3 (2026-11-11)
+
+Resultater fra en test af InterFlex:
+- Journalen kan kun hentes fra maj 2026. InterFlex viser maj, hvis man beder om tidligere måneder. Det er en grænse i InterFlex.
+- Rettelse: InterFlex husker det sidst viste år i fraværskalenderen, så bogmærket kunne hente det forkerte år. Nu vælger det selv årene.
+- Bogmærket henter fravær for både sidste år og i år (2025 og 2026) og slutter på indeværende år.
+- Appen lægger flere års fravær sammen. Antal feriedage beregnes kun for indeværende år.
+
 ## 1.6.2 (2026-11-11)
 
 - Udløbet Google-login vises øverst på alle sider. Er der ændringer, som ikke er gemt i Google Drev, siger beskeden det.

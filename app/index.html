@@ -296,7 +296,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.6.2';
+const APP_VERSION='1.6.3';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -962,12 +962,12 @@ function handleAbs(res,box,fname){
   if(!days.length){box.innerHTML='<p class="note neg">Fandt ingen fraværsdage på siden.</p>';return}
   const y=info.year||+days[0].iso.slice(0,4),today=todayISO(),curM=+today.slice(0,4)===y?+today.slice(5,7)-1:11;
   let ref=null;for(let m=Math.min(curM,11);m>=0;m--)if(months[m]&&months[m].pres!=null){ref={m,...months[m]};break}
-  const ferieUsed=days.filter(d=>d.full&&['FE','FF','VL'].includes(d.code)&&wdOf(d.iso)<5).length;
+  const ferieUsed=days.filter(d=>d.iso.startsWith(y+'-')&&d.full&&['FE','FF','VL'].includes(d.code)&&wdOf(d.iso)<5).length;
   const cnt={};for(const d of days){const k=absToRow(d).absence||'Note';cnt[k]=(cnt[k]||0)+1}
   absPending={days,info,ref,ferieTotal:ref&&ref.vac!=null?ferieUsed+ref.vac:null};
   const ex=days.filter(d=>S.rows[d.iso]).length;
   box.innerHTML=`<div class="box">
-    <div><b>${days.length} fraværsdage i ${y}</b>${info.name?` for ${esc(info.name)}${info.persNo?' ('+esc(info.persNo)+')':''}`:''}.
+    <div><b>${days.length} fraværsdage i ${info.years&&info.years.length>1?info.years.join(' og '):y}</b>${info.name?` for ${esc(info.name)}${info.persNo?' ('+esc(info.persNo)+')':''}`:''}.
       <div class="note">${Object.entries(cnt).map(([k,v])=>`${v} ${k==='Note'?'noter':k.toLowerCase()}`).join(' · ')}${ex?` · ${ex} dage har allerede registreringer, og dine tider bliver bevaret`:''}</div></div>
     ${absPending.ferieTotal!=null?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absFerie" checked style="width:auto"> Sæt feriedage i året til ${absPending.ferieTotal} (${ferieUsed} brugt + ${ref.vac} tilbage)</label>`:''}
     ${info.name&&!S.settings.name?`<label class="row" style="gap:8px;font-size:15px"><input type="checkbox" id="absName" checked style="width:auto"> Brug navnet ${esc(info.name)}</label>`:''}
@@ -1078,7 +1078,12 @@ function importHtml(text){
     const label=journals.length===1?`${MONTHS[f.m]} ${f.y}`:f.y===l.y?`${MONTHS[f.m]}–${MONTHS[l.m]} ${l.y}`:`${MONTHS[f.m]} ${f.y} – ${MONTHS[l.m]} ${l.y}`;
     handleJournal({y:l.y,m:l.m,label,days:[...seen.values()].sort((a,b)=>a.iso<b.iso?-1:1)},$('impJ'));
   }
-  if(cals.length)handleAbs(cals[cals.length-1],$('impA'));
+  if(cals.length){
+    const yr=c=>c.info.year||Math.max(...c.days.map(d=>+d.iso.slice(0,4)),0);
+    cals.sort((a,b)=>yr(a)-yr(b));const last=cals[cals.length-1],seen=new Map();
+    for(const c of cals)for(const d of c.days)seen.set(d.iso,d);
+    handleAbs({info:{...last.info,year:yr(last),years:cals.map(yr)},months:last.months,days:[...seen.values()].sort((a,b)=>a.iso<b.iso?-1:1)},$('impA'));
+  }
   return true;
 }
 function receiveImport(payload){
@@ -1146,8 +1151,22 @@ function flexBookmarklet(APP,MARK,SEP){
   function fresh(u){return u+(u.indexOf('?')<0?'?':'&')+'_flx='+new Date().getTime()}
   function req(url,cb){var x=new XMLHttpRequest();x.open('GET',url,true);try{x.overrideMimeType('text/html; charset=windows-1252')}catch(er){}
     x.onreadystatechange=function(){if(x.readyState===4)cb(x.status>=200&&x.status<400?x.responseText:'',x.status)};try{x.send(null)}catch(er){cb('',0)}}
-  function calendar(cb){if(adoc){pages.push(html(adoc));cb();return}
-    say('Henter fraværskalenderen…');req(fresh(base+'abscalendar.jsp'),function(t,s){if(t&&CAL.test(t))pages.push(t);else note('Fraværskalender: svar '+s);cb()})}
+  function yearOf(h){var m=String(h).match(/clickDay\(\s*'\d\d\.\d\d\.(\d{4})'/);return m?+m[1]:0}
+  function findDoc(w,test){try{var d=w.document;if(!d.__flxOld&&d.readyState==='complete'&&test(d))return d;
+      for(var i=0;i<w.frames.length;i++){var r=findDoc(w.frames[i],test);if(r)return r}}catch(e){}return null}
+  function waitDoc(test,cb){var t0=new Date().getTime();(function poll(){var d=findDoc(ifr.contentWindow,test);if(d){cb(d);return}
+      if(new Date().getTime()-t0>20000){cb(null);return}setTimeout(poll,300)})()}
+  // InterFlex remembers the last year shown, so choose each year explicitly: last year first, this year last.
+  function calendar(cb){var Y=new Date().getFullYear(),years=[Y-1,Y],k=0;
+    var isCal=function(y){return function(d){if(!(d.forms&&d.forms.iflxAbsenceCalendarFrm))return false;var h=d.documentElement.innerHTML;
+      return !y||yearOf(h)===y||/not yet employed|endnu ikke ansat/i.test(h)}};
+    (function next(){if(k>=years.length){cb();return}
+      var y=years[k++];say('Henter fravær for '+y+'…');mark(ifr.contentWindow);ifr.src=fresh(base+'abscalendar.jsp');
+      waitDoc(isCal(0),function(d){if(!d){note('Fraværskalender: kunne ikke åbnes: '+describe());next();return}
+        if(yearOf(html(d))===y){pages.push(html(d));next();return}
+        try{var F=d.forms.iflxAbsenceCalendarFrm;F.year.value=String(y);mark(ifr.contentWindow);F.submit()}catch(e){note('Fraværskalender '+y+': '+e.message);next();return}
+        setTimeout(function(){waitDoc(isCal(y),function(nd){var h=nd?html(nd):'';
+          if(nd&&yearOf(h)===y)pages.push(h);else if(!/not yet employed|endnu ikke ansat/i.test(h))note('Fraværskalender '+y+': '+describe());next()})},400)})})()}
   function isMonth(t,date){var j=t&&t.match(/Journal\s+for\s*(\d{1,2})\s*\/\s*(\d{4})/i);return!!j&&+j[1]===+date.substr(4,2)&&+j[2]===+date.substr(0,4)}
   /* The journal is driven in a hidden frame exactly like a person would: the page's own form is filled in and submitted,
      so InterFlex gets the same request as when you click. Scripts in the hidden frame are not allowed to run. */
