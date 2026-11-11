@@ -15,3 +15,5 @@ Month Journal*
 Thumbs.db
 desktop.ini
 ~$*
+# Rapporter og udtræk fra InterFlex (dine data)
+interflex-rapport*.json
