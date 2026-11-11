@@ -1,5 +1,17 @@
 # Ændringer
 
+## 1.5.0 (2026-11-11)
+
+Mobilvisningen er gennemgået:
+- Fast bundlinje med ikoner (Uge, Overblik, Indstillinger), som kan nås med tommelfingeren.
+- Ugen fylder cirka halvdelen: én fælles overskrift, dag og tal på én linje, felterne på én linje under.
+- Tomme weekenddage foldes sammen til én linje med "+ Registrér". Fraværsdage viser kun årsagen.
+- Tidsfelter med 16 px tekst, så iPhone ikke zoomer ind, og uden ur-ikon, så klokkeslættet kan ses.
+- Ugenavigation på én linje. Store knapper til at møde ind og gå hjem.
+- Overblik: månedsforkortelser med ét bogstav under grafen, smallere månedstabel uden tomme måneder.
+- Indstillinger: OneDrive-datafil og InterFlex-bogmærke skjules på telefonen, hvor de ikke virker. Lange adresser brydes pænt.
+- Rettelse: "1 dag mangler" i stedet for "1 dage mangler".
+
 ## 1.4.1 (2026-11-11)
 
 - Google Drev: knappen hedder nu "Log ind med Google".

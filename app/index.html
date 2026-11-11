@@ -100,13 +100,45 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--mu
 .chip.pos{background:var(--pos-soft)} .chip.neg{background:var(--neg-soft)} .chip.zero{color:var(--faint)}
 .miss{font-size:12px;color:var(--neg);font-weight:600}
 .wfoot{padding:14px 16px 16px 22px;border-top:1px solid var(--line-2);font-weight:600}
-.lbl-m{display:none}
+.lbl-m,.dhead-m,.addw,nav svg{display:none}
+/* ---------- phone layout ---------- */
 @media (max-width:720px){
   .dhead{display:none}
-  .day,.wfoot{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"dn net flx" "st en pa" "ab ab ab";row-gap:8px;padding:14px 16px}
-  .day .dn{grid-area:dn}.day .st{grid-area:st}.day .en{grid-area:en}.day .pa{grid-area:pa}.day .ab{grid-area:ab}.day .net{grid-area:net}.day .flx{grid-area:flx}
-  .lbl-m{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
-  .wfoot{grid-template-areas:"a b c"}.wfoot .hide-m{display:none}
+  .dhead-m{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 56px minmax(0,1.15fr);gap:6px;padding:10px 12px 2px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .day{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 56px minmax(0,1.15fr);grid-template-areas:"dn dn net flx" "st en pa ab";gap:6px;row-gap:8px;padding:12px}
+  .day .dn{grid-area:dn;flex-direction:row;align-items:baseline;gap:8px}.day .st{grid-area:st}.day .en{grid-area:en}.day .pa{grid-area:pa}.day .ab{grid-area:ab}.day .net{grid-area:net}.day .flx{grid-area:flx}
+  .day input,.day select{font-size:16px;padding:8px 6px}
+  .day input[type=time]{font-size:16px;letter-spacing:-.02em}
+  .day input[type=time]::-webkit-calendar-picker-indicator{display:none}
+  .day select{padding-right:2px}
+  /* absent days: only the reason */
+  .day.abs{grid-template-areas:"dn dn net flx" "ab ab ab ab"}
+  .day.abs .st,.day.abs .en,.day.abs .pa{display:none}
+  /* empty weekend days fold to one line */
+  .day.fold{grid-template-areas:"dn dn add add";padding-block:10px}
+  .day.fold .st,.day.fold .en,.day.fold .pa,.day.fold .ab,.day.fold .net,.day.fold .flx{display:none}
+  .day.fold .addw{display:block;grid-area:add;justify-self:end;font-size:14px;padding:4px 10px;border-radius:99px;color:var(--muted)}
+  .wfoot{grid-template-columns:1fr auto auto;gap:12px;padding:14px 12px}.wfoot .hide-m{display:none}
+  .weeknav{padding:12px;gap:6px}
+  .weeknav #prevW{order:0}.weeknav .wk{order:1}.weeknav #nextW{order:2}.weeknav #thisWeek{order:3;margin-left:auto}
+  .weeknav .rng{order:4;flex-basis:100%;margin:0;font-size:14px}
+  .todaybar{padding:14px 16px}.todaybar button{width:100%;justify-content:center;padding:12px}
+}
+@media (max-width:640px){
+  /* no backdrop-filter here: it would make the fixed bottom bar position itself inside the header */
+  header{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}
+  .hrow{padding-block:12px}
+  #monthTbl th,#monthTbl td{padding-inline:8px}
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);gap:0;
+    padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:12px;font-size:12px}
+  nav a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+  nav svg{display:block;width:22px;height:22px}
+  main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .hm,#monthTbl tr.fut{display:none}
+  #ifxCard{display:none}
+  .pad{padding:18px 16px}
 }
 
 .chartbox{position:relative;padding:8px 10px 6px}
@@ -125,6 +157,9 @@ tr.fut td{color:var(--faint)}
 .empty{padding:40px 22px;text-align:center;color:var(--muted)}
 .empty p{max-width:46ch;margin:6px auto}
 .note{font-size:14.5px;color:var(--muted);margin:0;max-width:68ch}
+.label.sub{margin:10px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+#syncBody{display:flex;flex-direction:column;gap:10px}
+#syncBody>.sub:first-child{margin:0;padding:0;border:0}
 .box{background:var(--accent-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
 details summary{cursor:pointer;font-weight:600;font-size:15px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;font-size:15px;z-index:30;max-width:calc(100% - 32px)}
@@ -140,9 +175,9 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
     <div class="hrow">
       <div class="brand"><i></i>Flexregnskab</div>
       <nav aria-label="Visninger">
-        <a href="#uge" data-v="uge">Uge</a>
-        <a href="#overblik" data-v="overblik">Overblik</a>
-        <a href="#indstillinger" data-v="indstillinger">Indstillinger</a>
+        <a href="#uge" data-v="uge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Uge</a>
+        <a href="#overblik" data-v="overblik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18"/><path d="M4 16l5-6 4 3 7-8"/></svg>Overblik</a>
+        <a href="#indstillinger" data-v="indstillinger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Indstillinger</a>
       </nav>
     </div>
   </div>
@@ -169,6 +204,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
         <button class="icon" id="nextW" aria-label="Næste uge">›</button>
       </div>
       <div class="dhead"><span>Dag</span><span>Mødt</span><span>Gået</span><span>Pause</span><span>Fravær</span><span class="r">Netto</span><span class="r">Flex</span></div>
+      <div class="dhead-m"><span>Mødt</span><span>Gået</span><span>Pause</span><span>Fravær</span></div>
       <div id="days"></div>
       <div class="wfoot" id="wfoot"></div>
     </div>
@@ -214,7 +250,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       </div>
       <p class="note" id="saveState">Ændringer gemmes automatisk.</p>
     </div>
-    <div class="card pad" style="display:flex;flex-direction:column;gap:14px">
+    <div class="card pad" id="ifxCard" style="display:flex;flex-direction:column;gap:14px">
       <h2>Hent fra InterFlex</h2>
       <ol class="note" style="padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px">
         <li>Træk knappen herunder op i din favoritlinje (Ctrl+Shift+B viser den). Det skal kun gøres én gang, og igen hvis appen flytter til en ny adresse.
@@ -256,7 +292,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.5.0';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -467,12 +503,12 @@ function renderGoogle(){
   const g=GDrive,line={ok:`Gemt i Google Drev kl. ${g.last?clock(g.last):''}`,busy:'Synkroniserer med Google Drev…',pending:'Gemmer i Google Drev…',
     needauth:'Tryk Forbind for at synkronisere med Google Drev',offline:'Offline · sendes til Google Drev når du er online',error:'Kunne ikke nå Google Drev · gemt på enheden'}[g.state]||'';
   const dot={ok:'ok',busy:'busy',pending:'busy',error:'err'}[g.state]||'';
-  let b=`<h3 class="label" style="margin:8px 0 0">Google Drev</h3>`;
+  let b=`<h3 class="label sub">Google Drev</h3>`;
   if(!g.enabled()){
     const uri=g.redirectUri(),local=!location.protocol.startsWith('http');
     b+=`<p class="note">Gem dine registreringer i dit personlige Google Drev, og brug appen på både telefon og computer. Det kræver et gratis klient-ID fra Google, som du selv opretter (trin i README).</p>
       ${local?`<p class="note neg">Appen er åbnet som en fil på computeren. Google-login kræver, at appen ligger på en https-adresse, fx GitHub Pages.</p>`:
-      `<p class="note">Adressen, du skal skrive ind hos Google som "Authorized redirect URI": <span class="n" style="user-select:all">${esc(uri)}</span></p>`}
+      `<p class="note">Adressen, du skal skrive ind hos Google som "Authorized redirect URI": <span class="n" style="user-select:all;word-break:break-all">${esc(uri)}</span></p>`}
       <div class="row"><input id="gClientIn" placeholder="1234567890-abc.apps.googleusercontent.com" style="flex:1;min-width:min(100%,260px)" class="n"><button id="gClientSave">Gem klient-ID</button></div>`;
     return{b,line:'',dot:''};
   }
@@ -508,10 +544,10 @@ function renderSync(){
   else fb=`<div class="row spread"><div><div><b>${esc(fname)}</b></div><div class="note"><span class="dot ${fdot}"></span>${esc(fline||'')}</div></div>
     <div class="row">${F.state==='needperm'?'<button class="primary" id="fPerm">Forbind</button>':'<button id="fRead">Hent nu</button>'}<button class="ghost" id="fPick">Skift fil</button><button class="ghost" id="fOff">Afbryd</button></div></div>
     ${F.state==='error'?`<p class="note neg">${esc(F.err)}</p>`:''}`;
-  let body=`<h3 class="label" style="margin:0">Datafil i OneDrive</h3>${fb}`;
+  let body=F.supported?`<h3 class="label sub">Datafil i OneDrive</h3>${fb}`:'';
   if(G)body+=G.b;
   if(!c.enabled()){$('syncBody').innerHTML=body;bindSync();return}
-  body+=`<h3 class="label" style="margin:8px 0 0">Microsoft-login</h3>`;
+  body+=`<h3 class="label sub">Microsoft-login</h3>`;
   if(!c.account)body+=`<p class="note">Log ind med din arbejdskonto, så gemmes dine registreringer i din egen OneDrive og følger dig mellem telefon og computer. Kun du kan se dem.</p><div class="row"><button class="primary" id="loginBtn">Log ind med Microsoft</button></div>${c.state==='error'?`<p class="note neg">${esc(c.err)}</p>`:''}`;
   else body+=`<div class="row spread"><div><div><b>${esc(who)}</b></div><div class="note"><span class="dot ${dot}"></span>${esc(line)}</div></div><div class="row"><button id="syncBtn">Synkroniser nu</button><button class="ghost" id="logoutBtn">Log ud</button></div></div>
     <p class="note">Gemmes i din OneDrive under <span class="n">${esc(CFG.cloudFile)}</span>.</p>${c.state==='error'?`<p class="note neg">${esc(c.err)}</p>`:''}`;
@@ -675,7 +711,7 @@ function buildWeek(){
       <div class="en"><span class="lbl-m">Gået</span><input type="time" data-k="end" aria-label="Gået ${WDL[i]}"></div>
       <div class="pa"><span class="lbl-m">Pause (min)</span><input inputmode="numeric" data-k="pause" class="n" aria-label="Pause i minutter ${WDL[i]}"></div>
       <div class="ab"><span class="lbl-m">Fravær</span><select data-k="absence" aria-label="Fravær ${WDL[i]}">${ABS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>
-      <div class="net r"></div><div class="flx r"></div></div>`}).join('');
+      <div class="net r"></div><div class="flx r"></div><button class="ghost addw" type="button" data-open="${iso}">+ Registrér</button></div>`}).join('');
 }
 function refreshWeek(){
   if(builtWeek!==weekStart)buildWeek();
@@ -685,7 +721,7 @@ function refreshWeek(){
   let tn=0,tf=0,tnorm=0;
   for(let i=0;i<7;i++){
     const iso=addDays(weekStart,i),x=CALC[iso],el=$('d-'+iso),r=x.r||{};
-    el.className='day'+(x.we?' we':'')+(x.isToday?' today':'')+(x.c&&x.c!=='flexfri'?' abs':'');
+    el.className='day'+(x.we?' we':'')+(x.isToday?' today':'')+(x.c&&x.c!=='flexfri'?' abs':'')+(x.we&&!x.r&&!openDays.has(iso)&&!el.contains(act)?' fold':'');
     for(const inp of el.querySelectorAll('[data-k]')){if(inp===act)continue;const k=inp.dataset.k;
       const v=k==='pause'?(r.pause??''):k==='absence'?(ABS.some(o=>o[0]===r.absence)?r.absence:(r.absence?'Fri':'')):(r[k]||'');
       if(inp.value!==String(v))inp.value=v;}
@@ -700,7 +736,7 @@ function refreshWeek(){
 function renderStats(weekFlex){
   const st=S.settings,sal=saldoNow(),y=NOW_Y,yr=Object.values(CALC).filter(x=>x.iso.startsWith(y+'-'));
   const fer=yr.filter(x=>x.c==='ferie'&&!x.we).length,ferLeft=(pnum(st.ferieDays)||0)-fer,miss=yr.filter(x=>x.missing).length;
-  $('stats').innerHTML=`<div class="stat lead"><span class="label">Flexsaldo</span><span class="v ${sgn(sal)}">${sal==null?'–':fs(sal)}</span><span class="s">${sal==null?'Regnskabet starter '+st.startDate:`timer · ${hm(sal||0)} t:m`}${miss?` · <span class="neg">${miss} dage mangler</span>`:''}</span></div>`+
+  $('stats').innerHTML=`<div class="stat lead"><span class="label">Flexsaldo</span><span class="v ${sgn(sal)}">${sal==null?'–':fs(sal)}</span><span class="s">${sal==null?'Regnskabet starter '+st.startDate:`timer · ${hm(sal||0)} t:m`}${miss?` · <span class="neg">${miss} ${miss===1?'dag':'dage'} mangler</span>`:''}</span></div>`+
     `<div class="stat"><span class="label">Denne uge</span><span class="v ${sgn(weekFlex)}">${fs(weekFlex)}</span><span class="s">timer flex</span></div>`+
     `<div class="stat"><span class="label">Ferie tilbage</span><span class="v">${String(ferLeft).replace('.',',')}</span><span class="s">af ${String(pnum(st.ferieDays)||0).replace('.',',')} dage i ${y}</span></div>`;
 }
@@ -724,7 +760,8 @@ async function saveDay(iso,row){
   if(Object.keys(clean).length)rows[iso]=clean;else delete rows[iso];
   await Store.saveMonth(key,rows);
 }
-const dayTimers={};
+const dayTimers={},openDays=new Set();
+$('days').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(!b)return;openDays.add(b.dataset.open);refreshWeek();const i=$('d-'+b.dataset.open).querySelector('input');if(i)i.focus()});
 $('days').addEventListener('change',e=>{const inp=e.target.closest('[data-k]');if(!inp)return;
   const iso=inp.closest('.day').dataset.iso,k=inp.dataset.k,row={...(S.rows[iso]||{})};
   if(k==='pause'){const p=pnum(inp.value);row.pause=p==null?null:Math.max(0,Math.round(p));}else row[k]=inp.value||null;
@@ -748,9 +785,9 @@ function renderOverview(){
   const months=MONTHS.map((n,m)=>{const md=days.filter(x=>+x.iso.slice(5,7)-1===m),mp=md.filter(x=>!x.fut&&x.saldo!=null);
     return{n,m,net:md.reduce((a,x)=>a+x.netto,0),flex:md.reduce((a,x)=>a+(x.saldo!=null?x.flex:0),0),fe:md.filter(x=>x.c==='ferie'&&!x.we).length,sy:md.filter(x=>x.c==='syg'&&!x.we).length,end:mp.length?mp[mp.length-1].saldo:null,has:mp.length>0}});
   const maxF=Math.max(1,...months.map(r=>Math.abs(r.flex)));
-  $('monthTbl').innerHTML=`<thead><tr><th>Måned</th><th class="r">Netto</th><th>Flex</th><th class="r"></th><th class="r">Ferie</th><th class="r">Syg</th><th class="r">Saldo</th></tr></thead><tbody>`+
-    months.map(r=>`<tr class="${r.has?'':'fut'}" data-m="${r.m}"><td>${r.n[0].toUpperCase()+r.n.slice(1)}</td><td class="r n">${r.has?f2(r.net):''}</td>`+
-      `<td style="width:30%">${r.has?`<span class="bar" style="width:${Math.max(2,Math.abs(r.flex)/maxF*100)}%;background:var(--${r.flex<0?'neg':'pos'})"></span>`:''}</td>`+
+  $('monthTbl').innerHTML=`<thead><tr><th>Måned</th><th class="r hm">Netto</th><th class="hm"></th><th class="r">Flex</th><th class="r">Ferie</th><th class="r">Syg</th><th class="r">Saldo</th></tr></thead><tbody>`+
+    months.map(r=>`<tr class="${r.has?'':'fut'}" data-m="${r.m}"><td>${r.n[0].toUpperCase()+r.n.slice(1)}</td><td class="r n hm">${r.has?f2(r.net):''}</td>`+
+      `<td class="hm" style="width:30%">${r.has?`<span class="bar" style="width:${Math.max(2,Math.abs(r.flex)/maxF*100)}%;background:var(--${r.flex<0?'neg':'pos'})"></span>`:''}</td>`+
       `<td class="r n ${sgn(r.flex)}">${r.has?fs(r.flex):''}</td><td class="r n">${r.fe||''}</td><td class="r n">${r.sy||''}</td><td class="r n">${r.end==null?'':fs(r.end)}</td></tr>`).join('')+'</tbody>';
 }
 function drawChart(pts){
@@ -762,7 +799,7 @@ function drawChart(pts){
   const X=iso=>L+(parseIso(iso)-x0)/(x1-x0)*(W-L-R),Y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
   let g='';
   for(let v=lo;v<=hi+1e-9;v+=step)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?'#c9cfd8':'#eef0f3'}" stroke-width="1"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end">${v>0?'+':''}${v}</text>`;
-  for(let m=0;m<12;m++)g+=`<text x="${X(isoOf(y,m,15))}" y="${H-6}" text-anchor="middle">${MONTHS[m][0].toUpperCase()+MONTHS[m].slice(1,3)}</text>`;
+  for(let m=0;m<12;m++)g+=`<text x="${X(isoOf(y,m,15))}" y="${H-6}" text-anchor="middle">${MONTHS[m][0].toUpperCase()+(W<560?'':MONTHS[m].slice(1,3))}</text>`;
   const line=pts.map((p,i)=>`${i?'L':'M'}${X(p.iso).toFixed(1)},${Y(p.saldo).toFixed(1)}`).join('');
   const area=line+`L${X(pts[pts.length-1].iso).toFixed(1)},${Y(0)}L${X(pts[0].iso).toFixed(1)},${Y(0)}Z`,lp=pts[pts.length-1];
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Flexsaldo gennem ${y}, senest ${fs(lp.saldo)} timer">
