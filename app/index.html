@@ -154,6 +154,19 @@ td.r,th.r{text-align:right}
 tbody tr{cursor:pointer} tbody tr:hover td{background:var(--bg)}
 tr.fut td{color:var(--faint)}
 .bar{display:inline-block;height:8px;border-radius:4px;vertical-align:middle}
+.paystats{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr));border-bottom:1px solid var(--line)}
+.ps{padding:14px 22px;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line)}
+.ps .v{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-.02em}
+.ps .s{font-size:13px;color:var(--muted)}
+#payDaysBox summary{padding:14px 22px;color:var(--accent)}
+#payTbl td,#payTbl th{padding:8px 12px;font-size:14px}
+#payTbl tr.we td{background:#fbfbfc;color:var(--muted)}
+#payTbl tr.today td{background:var(--today)}
+#payTbl tbody tr{cursor:default}
+.pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12.5px;font-weight:600;background:var(--bg);color:var(--muted)}
+.pill.ferie{background:var(--pos-soft);color:var(--pos)}.pill.syg{background:var(--neg-soft);color:var(--neg)}
+.pill.flex{background:#fff6d6;color:#8a6500}.pill.fri{background:var(--accent-soft);color:var(--accent)}
+@media (max-width:640px){.ps{padding:12px 16px}.ps .v{font-size:19px}#payTbl .hm2{display:none}.paynav .rng{order:4;flex-basis:100%;margin:0}.paynav #payNow{margin-left:auto}}
 .empty{padding:40px 22px;text-align:center;color:var(--muted)}
 .empty p{max-width:46ch;margin:6px auto}
 .note{font-size:14.5px;color:var(--muted);margin:0;max-width:68ch}
@@ -220,6 +233,20 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
       <select id="yearSel" style="width:auto" aria-label="År"></select>
     </div>
     <div class="card stats" id="ovStats"></div>
+    <div class="card" id="payCard">
+      <div class="weeknav paynav">
+        <span class="wk">Lønperiode</span><span class="rng" id="payRange"></span>
+        <button class="ghost" id="payNow">Aktuel</button>
+        <button class="icon" id="payPrev" aria-label="Forrige lønperiode">‹</button>
+        <button class="icon" id="payNext" aria-label="Næste lønperiode">›</button>
+      </div>
+      <div class="paystats" id="payStats"></div>
+      <details id="payDaysBox">
+        <summary>Vis dagene i perioden</summary>
+        <div class="tframe"><table id="payTbl"></table></div>
+      </details>
+      <div class="row" style="padding:4px 22px 18px"><button id="payXlsx">Hent perioden som Excel</button><span class="note" id="payNote"></span></div>
+    </div>
     <div class="card">
       <div class="pad" style="padding-bottom:0"><span class="label">Flexsaldo gennem året</span></div>
       <div class="chartbox" id="chart"></div>
@@ -240,6 +267,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
         <label class="f">Regnskab starter<input id="s-startDate" type="date"></label>
         <label class="f">Flexsaldo på startdagen (timer)<input id="s-startFlex" inputmode="decimal" class="n"></label>
         <label class="f">Feriedage pr. år<input id="s-ferieDays" inputmode="decimal" class="n"></label>
+        <label class="f">Lønperiode starter den (dag i måneden)<input id="s-payDay" inputmode="numeric" class="n"></label>
       </div>
     </div>
     <div class="card pad" style="display:flex;flex-direction:column;gap:18px">
@@ -307,7 +335,7 @@ details summary{cursor:pointer;font-weight:600;font-size:15px}
 <script>
 "use strict";
 /* ---------- config ---------- */
-const APP_VERSION='1.7.1';
+const APP_VERSION='1.8.0';
 const CFG=Object.assign({googleClientId:'',msClientId:'',msTenant:'organizations',cloudFile:'Apps/Flexregnskab/flexregnskab.json'},window.FLEX_CONFIG||{});
 const MSAL_URL='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
 const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -341,7 +369,7 @@ const hm=h=>{const m=Math.round(Math.abs(h)*60);return `${h<0?'−':''}${Math.fl
 const clock=t=>{const d=new Date(t);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Kunne ikke hente '+src.split('/').pop()+'. Er du online?'));document.head.appendChild(s)})}
-const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45,
+const DEF={name:'',startDate:mondayOf(todayISO()),startFlex:0,ferieDays:25,norm:[7.4,7.4,7.4,7.4,7.4],pauseFrom:6,p6:30,p9:45,payDay:21,
   hol:{maj1:true,grundlov:true,juleaften:true,nytaarsaften:false,bededag2030:true}};
 /* Danish public holidays. Easter by the anonymous Gregorian algorithm. Store bededag was abolished from 2024;
    the government plans to bring it back from 2030 (bill expected 2027), so that part is a setting. */
@@ -732,7 +760,7 @@ function absClass(a){const k=String(a||'').trim().toLowerCase();if(!k)return'';
 let CALC=null,weekStart=mondayOf(todayISO()),viewYear=NOW_Y,builtWeek=null;
 function compute(){
   const st=S.settings,today=todayISO(),start=st.startDate||DEF.startDate;
-  const ys=[NOW_Y,+start.slice(0,4),...Object.keys(S.rows).map(i=>+i.slice(0,4)),viewYear,+weekStart.slice(0,4)];
+  const ys=[NOW_Y,+start.slice(0,4),...Object.keys(S.rows).map(i=>+i.slice(0,4)),viewYear,+weekStart.slice(0,4),...PAY_YEARS];
   const from=`${Math.min(...ys)}-01-01`,to=`${Math.max(...ys)}-12-31`;
   const map={};let saldo=null,started=false;
   for(let iso=from;iso<=to;iso=addDays(iso,1)){
@@ -835,6 +863,73 @@ $('days').addEventListener('change',e=>{const inp=e.target.closest('[data-k]');i
 });
 
 /* ---------- Overblik ---------- */
+/* ---------- Lønperiode (fx 20. til 19.) ---------- */
+let payOffset=0,PAY_YEARS=[];
+function payRange(off){
+  const pd=Math.min(28,Math.max(1,Math.round(pnum(S.settings.payDay)||21))),t=new Date();
+  let y=t.getFullYear(),m=t.getMonth();if(t.getDate()<pd)m--;m+=off;y+=Math.floor(m/12);m=((m%12)+12)%12;
+  const start=isoOf(y,m,pd),end=addDays(m===11?isoOf(y+1,0,pd):isoOf(y,m+1,pd),-1);return{start,end};
+}
+const shortD=iso=>{const d=parseIso(iso);return `${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()].slice(0,3)}`};
+function payDays(){
+  const {start,end}=payRange(payOffset);
+  if(!CALC[addDays(start,-1)]||!CALC[end]){PAY_YEARS=[+start.slice(0,4)-(start.slice(5,7)==='01'?1:0),+end.slice(0,4)];compute()}
+  const days=[];for(let iso=start;iso<=end;iso=addDays(iso,1))days.push(CALC[iso]);
+  return{start,end,days};
+}
+function payType(x){const r=x.r||{};
+  if(x.iflxMiss)return['Mangler stempling','syg'];
+  if(x.c==='ferie')return[r.comment&&/feriefri/i.test(r.comment)?'Feriefridag':'Ferie','ferie'];
+  if(x.c==='syg')return['Syg','syg'];if(x.c==='flexfri')return['Flexfri','flex'];
+  if(x.c==='fri')return[r.comment||'Fri','fri'];if(x.hol)return[x.hol,'fri'];
+  if(x.missing)return['Mangler','syg'];return['',''];}
+function renderPay(){
+  const {start,end,days}=payDays(),today=todayISO(),done=days.filter(x=>!x.fut);
+  const sum=f=>days.reduce((a,x)=>a+f(x),0),cnt=f=>days.filter(f).length;
+  const net=sum(x=>x.netto),norm=sum(x=>x.open?0:x.norm),flex=sum(x=>x.open||x.saldo==null?0:x.flex);
+  const before=CALC[addDays(start,-1)],sStart=before?before.saldo:null,last=done.length?done[done.length-1]:null,sEnd=last?last.saldo:null;
+  const wd=x=>!x.we;
+  const n={arb:cnt(x=>x.brutto!=null),ferie:cnt(x=>wd(x)&&x.c==='ferie'),syg:cnt(x=>wd(x)&&x.c==='syg'),flexfri:cnt(x=>wd(x)&&x.c==='flexfri'),
+    fri:cnt(x=>wd(x)&&(x.c==='fri'||(x.hol&&!x.c&&x.brutto==null))),miss:cnt(x=>x.missing)};
+  const extra=sum(x=>(x.we||x.hol)?x.netto:0);
+  const running=end>=today&&start<=today;
+  $('payRange').textContent=`${shortD(start)} – ${shortD(end)} ${end.slice(0,4)}`+(running?' · i gang':'');
+  $('payNext').disabled=payOffset>=1;
+  const t=(lbl,v,sub,cls='')=>`<div class="ps"><span class="label">${lbl}</span><span class="v ${cls}">${v}</span><span class="s">${sub}</span></div>`;
+  $('payStats').innerHTML=
+    t('Arbejdet',f2(net),`timer netto · normtid ${f2(norm)}`)+
+    t('Flex i perioden',fs(flex),'timer',sgn(flex))+
+    t('Flexsaldo',sEnd==null?'–':fs(sEnd),sStart==null?'ved periodens slut':`fra ${fs(sStart)} ved start`,sgn(sEnd))+
+    t('Arbejdsdage',n.arb,running?'til og med i dag':'dage med tider')+
+    t('Ferie',n.ferie,'dage')+t('Syg',n.syg,'dage')+
+    (n.flexfri?t('Flexfri',n.flexfri,'dage'):'')+
+    (n.fri?t('Fri / helligdag',n.fri,'dage'):'')+
+    (extra>0.004?t('Weekend og helligdage',f2(extra),'timer arbejdet'):'')+
+    (n.miss?t('Mangler',n.miss,'dage uden registrering','neg'):'');
+  const rows=days.filter(x=>!x.we||x.r);
+  $('payTbl').innerHTML=`<thead><tr><th>Dato</th><th class="hm2">Mødt</th><th class="hm2">Gået</th><th class="r hm2">Pause</th><th class="r">Netto</th><th class="r">Flex</th><th>Type / note</th></tr></thead><tbody>`+
+    rows.map(x=>{const r=x.r||{},[ty,cl]=payType(x),note=ty?`<span class="pill ${cl}">${esc(ty)}</span>`:(r.comment?`<span class="small muted">${esc(r.comment)}</span>`:'');
+      return `<tr class="${x.we?'we':''}${x.iso===today?' today':''}"><td><b>${WD[x.wd]}</b> <span class="n">${+x.iso.slice(8)}/${+x.iso.slice(5,7)}</span></td>`+
+        `<td class="n hm2">${r.start||''}</td><td class="n hm2">${r.end||''}</td><td class="r n hm2">${x.brutto!=null?x.pause:''}</td>`+
+        `<td class="r n">${x.brutto!=null?f2(x.netto):''}</td><td class="r n ${sgn(x.flex)}">${x.open||x.saldo==null||Math.abs(x.flex)<0.005?'':fs(x.flex)}</td><td>${note}</td></tr>`}).join('')+
+    `</tbody><tfoot><tr><td>I alt</td><td class="hm2"></td><td class="hm2"></td><td class="hm2"></td><td class="r n">${f2(net)}</td><td class="r n ${sgn(flex)}">${fs(flex)}</td><td></td></tr></tfoot>`;
+  $('payNote').textContent=running?'Perioden er ikke slut endnu.':'';
+}
+async function payXlsx(){
+  const b=$('payXlsx');b.disabled=true;
+  try{
+    if(!window.XLSX)await loadScript(XLSX_URL);
+    const {start,end,days}=payDays(),r2=n=>n==null?'':Math.round(n*100)/100;
+    const net=days.reduce((a,x)=>a+x.netto,0),norm=days.reduce((a,x)=>a+(x.open?0:x.norm),0),flex=days.reduce((a,x)=>a+(x.open||x.saldo==null?0:x.flex),0);
+    const aoa=[['Lønperiode',start,'til',end],[],['Arbejdet (netto)',r2(net)],['Normtid',r2(norm)],['Flex i perioden',r2(flex)],[],
+      ['Dato','Ugedag','Mødt','Gået','Pause (min)','Netto','Normtid','Flex','Type','Note']];
+    for(const x of days){if(x.we&&!x.r)continue;const r=x.r||{},[ty]=payType(x);
+      aoa.push([x.iso,WD[x.wd],r.start||'',r.end||'',x.brutto!=null?x.pause:'',x.brutto!=null?r2(x.netto):'',r2(x.norm),x.open||x.saldo==null?'':r2(x.flex),ty,r.comment||''])}
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Lønperiode');
+    offer(`Lønperiode ${start} til ${end}.xlsx`,new Blob([XLSX.write(wb,{type:'array',bookType:'xlsx'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }catch(e){toast(e.message||'Excel-filen kunne ikke laves.')}
+  b.disabled=false;
+}
 function renderOverview(){
   const st=S.settings,y=viewYear,days=Object.values(CALC).filter(x=>x.iso.startsWith(y+'-'));
   const years=[...new Set([NOW_Y,...Object.keys(S.rows).map(i=>+i.slice(0,4)),+st.startDate.slice(0,4)])].sort();
@@ -847,6 +942,7 @@ function renderOverview(){
     `<div class="stat"><span class="label">Arbejdet</span><span class="v">${Math.round(net).toLocaleString('da-DK')}</span><span class="s">timer netto</span></div>`+
     `<div class="stat"><span class="label">Fravær</span><span class="v">${fer}<span class="s"> / </span>${syg}</span><span class="s">feriedage / sygedage</span></div>`;
   drawChart(days.filter(x=>x.saldo!=null&&!x.fut));
+  renderPay();
   const months=MONTHS.map((n,m)=>{const md=days.filter(x=>+x.iso.slice(5,7)-1===m),mp=md.filter(x=>!x.fut&&x.saldo!=null);
     return{n,m,net:md.reduce((a,x)=>a+x.netto,0),flex:md.reduce((a,x)=>a+(x.saldo!=null?x.flex:0),0),fe:md.filter(x=>x.c==='ferie'&&!x.we).length,sy:md.filter(x=>x.c==='syg'&&!x.we).length,end:mp.length?mp[mp.length-1].saldo:null,has:mp.length>0}});
   const maxF=Math.max(1,...months.map(r=>Math.abs(r.flex)));
@@ -884,7 +980,7 @@ function drawChart(pts){
 }
 
 /* ---------- Indstillinger ---------- */
-const SF=['name','startDate','startFlex','ferieDays','p6','pauseFrom','p9'];
+const SF=['name','startDate','startFlex','ferieDays','payDay','p6','pauseFrom','p9'];
 function fillSettings(){
   const st=S.settings,act=document.activeElement;
   if(!$('normFields').children.length)$('normFields').innerHTML=WD.slice(0,5).map((n,i)=>`<label class="f">${n}<input id="s-norm${i}" inputmode="decimal" class="n"></label>`).join('');
@@ -895,7 +991,8 @@ function fillSettings(){
 let sT=null;
 function settingsChanged(){clearTimeout(sT);$('saveState').textContent='Gemmer…';
   sT=setTimeout(async()=>{const st={...S.settings};
-    for(const f of SF){const v=$('s-'+f).value;st[f]=['startFlex','ferieDays','p6','p9','pauseFrom'].includes(f)?(pnum(v)??0):v.trim();}
+    for(const f of SF){const v=$('s-'+f).value;st[f]=['startFlex','ferieDays','p6','p9','pauseFrom','payDay'].includes(f)?(pnum(v)??0):v.trim();
+    st.payDay=Math.min(28,Math.max(1,Math.round(st.payDay)||21));}
     if(!/^\d{4}-\d{2}-\d{2}$/.test(st.startDate))st.startDate=DEF.startDate;
     st.norm=[0,1,2,3,4].map(i=>pnum($('s-norm'+i).value)??7.4);
     await Store.saveSettings(st);$('saveState').textContent='Gemt.';},600);}
@@ -1319,6 +1416,8 @@ $('prevW').onclick=()=>{weekStart=addDays(weekStart,-7);compute();refreshWeek()}
 $('nextW').onclick=()=>{weekStart=addDays(weekStart,7);compute();refreshWeek()};
 $('thisWeek').onclick=()=>{weekStart=mondayOf(todayISO());refreshWeek()};
 $('yearSel').onchange=e=>{viewYear=+e.target.value;compute();renderOverview()};
+$('payPrev').onclick=()=>{payOffset--;renderPay()};$('payNext').onclick=()=>{payOffset++;renderPay()};$('payNow').onclick=()=>{payOffset=0;renderPay()};
+$('payXlsx').onclick=payXlsx;
 $('monthTbl').onclick=e=>{const tr=e.target.closest('tr[data-m]');if(!tr)return;weekStart=mondayOf(isoOf(viewYear,+tr.dataset.m,1));compute();location.hash='uge';refreshWeek()};
 for(const f of SF)$('s-'+f).addEventListener('input',settingsChanged);
 $('normFields').addEventListener('input',settingsChanged);

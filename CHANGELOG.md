@@ -1,5 +1,12 @@
 # Ændringer
 
+## 1.8.0 (2026-11-13)
+
+- Ny sektion "Lønperiode" under Overblik til at tjekke lønsedlen. Standard er den 21. til den 20. måneden efter, og startdagen kan ændres under Indstillinger.
+  - Nøgletal: arbejdede timer netto, normtid, flex i perioden, flexsaldo ved start og slut, arbejdsdage, ferie, syg, flexfri, fri/helligdag, timer på weekender og helligdage samt dage, der mangler.
+  - Dagsliste for perioden med tider, netto, flex og type, farvemarkeret. På telefonen vises kun netto, flex og type.
+  - Bladr mellem perioder med ‹ ›, og hent perioden som Excel.
+
 ## 1.7.1 (2026-11-11)
 
 - Store bededag: regeringen planlægger at genindføre den fra 2030 (lovforslag ventes i 2027). Det er en indstilling, "Store bededag fra 2030", som er slået til. 2024–2029 er den ikke helligdag.
